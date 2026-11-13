@@ -2376,7 +2376,8 @@ public class DrawPreview {
             top_x += (int) (10 * scale_dp + 0.5f); // convert dps to pixels
         }
 
-        onDrawInfoLines(canvas, top_x, top_y, text_base_y, device_ui_rotation, time_ms);
+        if( !net.sourceforge.opencamera.ZernoHooks.ZERNO_UI ) // Zerno: the info lines are replaced by the Compose UI
+            onDrawInfoLines(canvas, top_x, top_y, text_base_y, device_ui_rotation, time_ms);
 
         canvas.restore();
     }

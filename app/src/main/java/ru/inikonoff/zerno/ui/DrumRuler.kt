@@ -1,0 +1,111 @@
+package ru.inikonoff.zerno.ui
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
+
+/** A horizontal "drum" ruler: the value under the fixed centre mark is the selected one. Scroll
+ *  it (it snaps to values), or tap a value to bring it to the centre.
+ */
+@Composable
+fun DrumRuler(
+    labels: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val itemWidth = 60.dp
+    BoxWithConstraints(modifier.fillMaxWidth().height(52.dp)) {
+        val itemPx = with(LocalDensity.current) { itemWidth.toPx() }
+        val sidePadding = (maxWidth - itemWidth) / 2
+        val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex.coerceIn(0, (labels.size - 1).coerceAtLeast(0)))
+        val scope = rememberCoroutineScope()
+        val currentOnSelect by rememberUpdatedState(onSelect)
+        val currentSelected by rememberUpdatedState(selectedIndex)
+        val count by rememberUpdatedState(labels.size)
+
+        val centred by remember {
+            derivedStateOf {
+                val index = listState.firstVisibleItemIndex + if (listState.firstVisibleItemScrollOffset > itemPx / 2) 1 else 0
+                index.coerceIn(0, (count - 1).coerceAtLeast(0))
+            }
+        }
+
+        // the user turned the drum
+        LaunchedEffect(listState) {
+            snapshotFlow { centred to listState.isScrollInProgress }
+                .distinctUntilChanged()
+                .collect { (index, scrolling) ->
+                    if (scrolling && index != currentSelected) currentOnSelect(index)
+                }
+        }
+        // the value changed from outside (e.g. taken over from the auto exposure)
+        LaunchedEffect(selectedIndex, labels.size) {
+            if (!listState.isScrollInProgress && centred != selectedIndex && selectedIndex in labels.indices) {
+                listState.scrollToItem(selectedIndex)
+            }
+        }
+
+        LazyRow(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = sidePadding),
+            flingBehavior = rememberSnapFlingBehavior(listState),
+        ) {
+            items(labels.size) { i ->
+                val isCentre = i == centred
+                Box(
+                    Modifier.width(itemWidth).fillMaxHeight().tap {
+                        currentOnSelect(i)
+                        scope.launch { listState.animateScrollToItem(i) }
+                    },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Label(
+                        labels[i],
+                        modifier = Modifier.padding(bottom = 10.dp),
+                        color = if (isCentre) ZernoColors.Accent else ZernoColors.Dim,
+                        size = if (isCentre) 15.sp else 13.sp,
+                        weight = if (isCentre) FontWeight.Bold else FontWeight.Medium,
+                    )
+                }
+            }
+        }
+        // the fixed centre mark
+        Canvas(Modifier.fillMaxSize()) {
+            val x = size.width / 2f
+            drawLine(
+                ZernoColors.Accent, Offset(x, size.height - 12.dp.toPx()), Offset(x, size.height - 2.dp.toPx()),
+                strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round,
+            )
+        }
+    }
+}

@@ -2433,11 +2433,24 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         }
     }
 
+    /** Zerno: limits max_zoom_factor so that the user can't zoom beyond
+     *  ZernoHooks.MAX_ZOOM_RATIO_PERCENT.
+     */
+    private void limitMaxZoom() {
+        if( !net.sourceforge.opencamera.ZernoHooks.ZERNO_UI || zoom_ratios == null )
+            return;
+        int limit = this.max_zoom_factor;
+        while( limit > 0 && zoom_ratios.get(limit) > net.sourceforge.opencamera.ZernoHooks.MAX_ZOOM_RATIO_PERCENT )
+            limit--;
+        this.max_zoom_factor = limit;
+    }
+
     private void initZoom() {
         this.has_zoom = camera_controller_supports_zoom && applicationInterface.allowZoom();
         if( this.has_zoom ) {
             this.max_zoom_factor = camera_controller_max_zoom_factor;
             this.zoom_ratios = camera_controller_zoom_ratios;
+            limitMaxZoom(); // Zerno
         }
         else {
             this.max_zoom_factor = 0;
@@ -2462,6 +2475,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         if( this.has_zoom ) {
             this.max_zoom_factor = camera_controller_max_zoom_factor;
             this.zoom_ratios = camera_controller_zoom_ratios;
+            limitMaxZoom(); // Zerno
         }
         else {
             this.max_zoom_factor = 0;
@@ -4712,6 +4726,11 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 showToast(null, getExposureTimeString(new_exposure_time), 0, true);
             }
         }
+    }
+
+    /** Zerno: the size of one exposure compensation step, in EV. */
+    public float getExposureStep() {
+        return this.exposure_step;
     }
 
     public String getExposureCompensationString(int exposure) {
@@ -8233,6 +8252,10 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         //final boolean use_fake_toast = true;
         //final boolean use_fake_toast = old_use_fake_toast;
         if( !applicationInterface.getShowToastsPref() ) {
+            return;
+        }
+        if( net.sourceforge.opencamera.ZernoHooks.suppressToast() ) {
+            // Zerno: the Compose UI already shows the value that this toast would report
             return;
         }
 

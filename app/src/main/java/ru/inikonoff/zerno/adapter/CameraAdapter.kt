@@ -1,0 +1,592 @@
+package ru.inikonoff.zerno.adapter
+
+import android.content.SharedPreferences
+import android.graphics.Bitmap
+import android.os.Handler
+import android.os.Looper
+import android.preference.PreferenceManager
+import android.view.OrientationEventListener
+import android.view.View
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import net.sourceforge.opencamera.MainActivity
+import net.sourceforge.opencamera.PreferenceKeys
+import net.sourceforge.opencamera.R
+import net.sourceforge.opencamera.ZernoHooks
+import net.sourceforge.opencamera.cameracontroller.CameraController
+import net.sourceforge.opencamera.preview.Preview
+import kotlin.math.abs
+import kotlin.math.roundToInt
+
+/** The adapter between the Zerno UI and the Open Camera engine.
+ *
+ *  It plays the role of the view model: the UI observes [state] and calls the action methods
+ *  below; the adapter translates those into engine preferences and engine calls. It is a plain
+ *  class rather than an androidx ViewModel, because everything it talks to (Preview,
+ *  CameraController, MyApplicationInterface) is owned by, and has the lifetime of, MainActivity.
+ *
+ *  All methods must be called on the main thread.
+ */
+class CameraAdapter(private val activity: MainActivity) {
+    private val prefs: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(activity)
+    private val handler = Handler(Looper.getMainLooper())
+
+    private val _state = MutableStateFlow(UiState())
+    val state: StateFlow<UiState> = _state.asStateFlow()
+
+    private val preview: Preview? get() = activity.preview
+    private val controller: CameraController? get() = activity.preview?.cameraController
+
+    private var zoomRatios: List<Float> = emptyList()
+
+    /** How far the device is turned clockwise from portrait, snapped to 0/90/180/270. The camera
+     *  screen is locked to portrait, so the UI turns its icons itself.
+     */
+    private var deviceOrientation = 0
+    private val orientationListener = object : OrientationEventListener(activity) {
+        override fun onOrientationChanged(orientation: Int) {
+            if (orientation == ORIENTATION_UNKNOWN) return
+            var diff = abs(orientation - deviceOrientation)
+            if (diff > 180) diff = 360 - diff
+            // only turn once the device is clearly in the new orientation (same rule as the engine)
+            if (diff > 60) {
+                deviceOrientation = (orientation + 45) / 90 * 90 % 360
+                _state.update { it.copy(uiRotation = (360 - deviceOrientation) % 360) }
+            }
+        }
+    }
+
+    /** Called when the camera screen becomes active / inactive. */
+    fun setActive(active: Boolean) {
+        if (active && orientationListener.canDetectOrientation()) orientationListener.enable()
+        else orientationListener.disable()
+    }
+
+    // ---- start up -------------------------------------------------------------------------
+
+    /** Called before the engine opens the camera: makes the engine's preferences match the
+     *  Zerno settings. Only writes preferences, the camera isn't available yet.
+     */
+    fun prepareEnginePreferences(firstRun: Boolean) {
+        val editor = prefs.edit()
+        if (!prefs.getBoolean(KEY_DEFAULTS_DONE, false)) {
+            // one-off defaults for a fresh install
+            if (activity.supportsCamera2()) {
+                // manual exposure, noise reduction control and the Night mode all need Camera2
+                editor.putString(PreferenceKeys.CameraAPIPreferenceKey, "preference_camera_api_camera2")
+            }
+            // the engine's on-preview read-outs are replaced by the Zerno UI
+            editor.putBoolean(PreferenceKeys.ShowZoomPreferenceKey, false)
+            editor.putBoolean(PreferenceKeys.ShowISOPreferenceKey, false)
+            editor.putBoolean(PreferenceKeys.ShowBatteryPreferenceKey, false)
+            editor.putBoolean(PreferenceKeys.ShowTimePreferenceKey, false)
+            editor.putBoolean(PreferenceKeys.ShowFreeMemoryPreferenceKey, false)
+            editor.putBoolean(PreferenceKeys.ShowCameraIDPreferenceKey, false)
+            editor.putBoolean(PreferenceKeys.ShowAnglePreferenceKey, false)
+            editor.putBoolean(PreferenceKeys.ThumbnailAnimationPreferenceKey, false)
+            editor.putBoolean(KEY_DEFAULTS_DONE, true)
+        }
+        // Zerno is photo only
+        editor.putBoolean(PreferenceKeys.IsVideoPreferenceKey, false)
+
+        val mode = storedMode()
+        val detail = storedDetail()
+        val hdr = storedHdr()
+        writeModePreferences(editor, mode, detail, hdr)
+        editor.apply()
+
+        _state.update {
+            it.copy(
+                mode = mode, detail = detail, hdr = hdr,
+                grid = prefs.getString(PreferenceKeys.ShowGridPreferenceKey, GRID_NONE) != GRID_NONE,
+                level = prefs.getBoolean(PreferenceKeys.ShowAngleLinePreferenceKey, false),
+                timer = timerFromPref(),
+            )
+        }
+    }
+
+    /** Called whenever a camera has been (re)opened: reads what it can do. */
+    fun onCameraSetup() {
+        val preview = preview ?: return
+        val caps = readCapabilities(preview)
+        zoomRatios = if (preview.supportsZoom()) (0..preview.maxZoom).map { preview.getZoomRatio(it) } else emptyList()
+
+        var s = _state.value
+        var mode = s.mode
+        var detail = s.detail
+        var hdr = s.hdr
+        if (mode !in caps.modes) mode = Mode.PHOTO
+        if (detail !in caps.details) detail = caps.details.first()
+        if (hdr !in caps.hdrs) hdr = Hdr.OFF
+        val changed = mode != s.mode || detail != s.detail || hdr != s.hdr
+        s = s.copy(caps = caps, mode = mode, detail = detail, hdr = hdr, cameraOpen = true)
+        _state.value = s
+        refreshPro()
+        poll()
+        if (changed) {
+            // the stored choice isn't available on this camera: fall back, but not from inside
+            // the engine's cameraSetup()
+            handler.post { applyMode(mode, detail, hdr, persist = false) }
+        }
+    }
+
+    private fun readCapabilities(preview: Preview): Capabilities {
+        val modes = buildList {
+            if (activity.supportsNoiseReduction()) add(Mode.NIGHT)
+            add(Mode.PHOTO)
+            if (preview.supportsISORange() && preview.supportsExposureTime()) add(Mode.PRO)
+            else if (preview.supportsFocus() && preview.supportedFocusValues?.contains(FOCUS_MANUAL) == true) add(Mode.PRO)
+        }
+        val nrModes = preview.supportedNoiseReductionModes ?: emptyList()
+        val details = buildList {
+            if ("off" in nrModes) add(Detail.OFF)
+            if ("minimal" in nrModes) add(Detail.MINIMAL)
+            add(Detail.STANDARD)
+        }
+        val hdrs = buildList {
+            add(Hdr.OFF)
+            if (activity.supportsDRO()) add(Hdr.DRO)
+            if (activity.supportsHDR()) add(Hdr.HDR)
+        }
+        val manualExposure = preview.supportsISORange() && preview.supportsExposureTime()
+        val wbValues = preview.supportedWhiteBalances ?: emptyList()
+        val wbPresets = WB_PRESETS.filter { it in wbValues }
+        val kelvins = if (preview.supportsWhiteBalanceTemperature() && "manual" in wbValues) {
+            val lo = (preview.minimumWhiteBalanceTemperature + 99) / 100 * 100
+            val hi = preview.maximumWhiteBalanceTemperature / 100 * 100
+            if (hi > lo) (lo..hi step 100).toList() else emptyList()
+        } else emptyList()
+        val manualFocus = preview.supportsFocus() && preview.supportedFocusValues?.contains(FOCUS_MANUAL) == true &&
+                preview.minimumFocusDistance > 0f
+        return Capabilities(
+            modes = modes,
+            details = details,
+            hdrs = hdrs,
+            canSwitchCamera = preview.cameraControllerManager.numberOfCameras > 1,
+            hasZoom = preview.supportsZoom(),
+            zoomMin = if (preview.supportsZoom()) maxOf(1f, preview.minZoomRatio) else 1f,
+            zoomMax = if (preview.supportsZoom()) preview.maxZoomRatio else 1f,
+            manualExposure = manualExposure,
+            isoValues = if (manualExposure) Scales.isoValues(preview.minimumISO, preview.maximumISO) else emptyList(),
+            shutterValues = if (manualExposure) Scales.shutterValues(preview.minimumExposureTime, preview.maximumExposureTime) else emptyList(),
+            evMin = if (preview.supportsExposures()) preview.minimumExposure else 0,
+            evMax = if (preview.supportsExposures()) preview.maximumExposure else 0,
+            evStep = preview.exposureStep,
+            wbPresets = wbPresets,
+            wbKelvinValues = kelvins,
+            manualFocus = manualFocus,
+            minFocusDistance = preview.minimumFocusDistance,
+        )
+    }
+
+    // ---- polling --------------------------------------------------------------------------
+
+    /** Reads the engine's transient state. Called a few times per second while the camera
+     *  screen is showing: this keeps the engine free of UI callbacks.
+     */
+    fun poll() {
+        val preview = preview ?: return
+        val controller = preview.cameraController
+        val open = controller != null
+        val taking = open && preview.isTakingPhoto
+        val onTimer = open && preview.isOnTimer
+        val s = _state.value
+        val multiFrame = s.mode == Mode.NIGHT || (s.mode == Mode.PHOTO && s.hdr == Hdr.HDR)
+        var pro = s.pro
+        if (open && s.mode == Mode.PRO && controller != null) {
+            val liveIso = if (controller.captureResultHasIso()) controller.captureResultIso() else 0
+            val liveShutter = if (controller.captureResultHasExposureTime()) controller.captureResultExposureTime() else 0L
+            // round, so that noise in the auto exposure doesn't cause constant recomposition
+            pro = pro.copy(liveIso = liveIso, liveShutterNs = Scales.nearestShutter(liveShutter))
+        }
+        updatePreviewPosition()
+        val (top, bottom) = previewExtent()
+        _state.update {
+            it.copy(
+                cameraOpen = open,
+                takingPhoto = taking,
+                onTimer = onTimer,
+                holdStill = taking && !onTimer && multiFrame,
+                saving = activity.applicationInterface.imageSaver.nRealImagesToSave > 0,
+                frontCamera = controller?.facing == CameraController.Facing.FACING_FRONT,
+                zoom = if (open && preview.supportsZoom()) preview.zoomRatio else 1f,
+                pro = pro,
+                previewTop = top,
+                previewBottom = bottom,
+            )
+        }
+    }
+
+    // ---- preview placement ----------------------------------------------------------------
+
+    /** The engine centres the preview in the window. Like the Honor camera, Zerno instead puts
+     *  it just below the top bar, leaving the spare room at the bottom for the controls. This is
+     *  done with a translation, so the engine's own layout code is untouched.
+     */
+    private fun updatePreviewPosition() {
+        val frame = activity.findViewById<View>(R.id.preview) ?: return
+        val root = frame.parent as? View ?: return
+        if (frame.height == 0 || root.height == 0) return
+        val spare = root.height - frame.height
+        val translation = if (spare > 0) {
+            val density = activity.resources.displayMetrics.density
+            val insets = ViewCompat.getRootWindowInsets(root)
+                ?.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            val wantedTop = (insets?.top ?: 0) + (TOP_BAR_DP * density).roundToInt()
+            (minOf(wantedTop, spare) - frame.top).toFloat()
+        } else 0f
+        if (frame.translationY != translation) frame.translationY = translation
+    }
+
+    private fun previewExtent(): Pair<Int, Int> {
+        val frame = activity.findViewById<View>(R.id.preview) ?: return 0 to 0
+        if (frame.height == 0) return 0 to 0
+        val top = frame.top + frame.translationY.roundToInt()
+        return top to top + frame.height
+    }
+
+    // ---- shooting -------------------------------------------------------------------------
+
+    fun takePhoto() {
+        if (controller == null) return
+        activity.takePicture(false)
+        poll()
+    }
+
+    fun switchCamera() {
+        ZernoHooks.suppressToastsFor(TOAST_QUIET_MS)
+        activity.clickedSwitchCamera(null)
+    }
+
+    fun openGallery() = activity.clickedGallery(null)
+
+    fun openSettings() = activity.openSettings()
+
+    fun onGalleryThumbnail(thumbnail: Bitmap?) = _state.update { it.copy(thumbnail = thumbnail) }
+
+    fun onSettingsVisible(visible: Boolean) = _state.update { it.copy(settingsOpen = visible) }
+
+    // ---- zoom -----------------------------------------------------------------------------
+
+    /** Zooms to the supported zoom ratio closest to [ratio]. */
+    fun setZoom(ratio: Float, animate: Boolean = false) {
+        val preview = preview ?: return
+        if (zoomRatios.isEmpty() || controller == null) return
+        val caps = _state.value.caps
+        val target = ratio.coerceIn(caps.zoomMin, caps.zoomMax)
+        var best = 0
+        for (i in zoomRatios.indices) {
+            if (abs(zoomRatios[i] - target) < abs(zoomRatios[best] - target)) best = i
+        }
+        if (best != controller?.zoom) {
+            preview.zoomTo(best, false, animate)
+        }
+        _state.update { it.copy(zoom = if (animate) it.zoom else zoomRatios[best]) }
+    }
+
+    // ---- modes and top bar switches -------------------------------------------------------
+
+    fun setMode(mode: Mode) {
+        val s = _state.value
+        if (mode == s.mode || mode !in s.caps.modes || s.takingPhoto) return
+        applyMode(mode, s.detail, s.hdr, persist = true)
+    }
+
+    fun setDetail(detail: Detail) {
+        val s = _state.value
+        if (detail == s.detail || detail !in s.caps.details) return
+        applyMode(s.mode, detail, s.hdr, persist = true)
+    }
+
+    fun setHdr(hdr: Hdr) {
+        val s = _state.value
+        if (hdr == s.hdr || hdr !in s.caps.hdrs) return
+        applyMode(s.mode, s.detail, hdr, persist = true)
+    }
+
+    fun setGrid(on: Boolean) {
+        prefs.edit().putString(PreferenceKeys.ShowGridPreferenceKey, if (on) GRID_THIRDS else GRID_NONE).apply()
+        activity.applicationInterface.drawPreview.updateSettings()
+        _state.update { it.copy(grid = on) }
+    }
+
+    fun setLevel(on: Boolean) {
+        prefs.edit().putBoolean(PreferenceKeys.ShowAngleLinePreferenceKey, on).apply()
+        activity.applicationInterface.drawPreview.updateSettings()
+        _state.update { it.copy(level = on) }
+    }
+
+    fun setTimer(timer: Timer) {
+        prefs.edit().putString(PreferenceKeys.TimerPreferenceKey, timer.seconds.toString()).apply()
+        _state.update { it.copy(timer = timer) }
+    }
+
+    private fun applyMode(mode: Mode, detail: Detail, hdr: Hdr, persist: Boolean) {
+        val old = _state.value.mode
+        val editor = prefs.edit()
+        if (persist) {
+            editor.putString(KEY_MODE, mode.name)
+            editor.putString(KEY_DETAIL, detail.name)
+            editor.putString(KEY_HDR, hdr.name)
+        }
+        if (old == Mode.PRO && mode != Mode.PRO) {
+            stashProSettings(editor)
+        } else if (old != Mode.PRO && mode == Mode.PRO) {
+            restoreProSettings(editor)
+        }
+        writeModePreferences(editor, mode, detail, hdr)
+        editor.apply()
+        _state.update { it.copy(mode = mode, detail = detail, hdr = hdr) }
+        updateEngine()
+    }
+
+    /** Makes the engine pick up changed preferences (this re-runs the camera set up, which in
+     *  turn calls back into [onCameraSetup]).
+     */
+    private fun updateEngine() {
+        ZernoHooks.suppressToastsFor(TOAST_QUIET_MS)
+        activity.applicationInterface.drawPreview.updateSettings()
+        activity.updateForSettings(true, "", false, false)
+        refreshPro()
+    }
+
+    private fun writeModePreferences(editor: SharedPreferences.Editor, mode: Mode, detail: Detail, hdr: Hdr) {
+        val photoMode = when (mode) {
+            Mode.NIGHT -> "preference_photo_mode_noise_reduction"
+            Mode.PRO -> "preference_photo_mode_std"
+            Mode.PHOTO -> when (hdr) {
+                Hdr.OFF -> "preference_photo_mode_std"
+                Hdr.DRO -> "preference_photo_mode_dro"
+                Hdr.HDR -> "preference_photo_mode_hdr"
+            }
+        }
+        editor.putString(PreferenceKeys.PhotoModePreferenceKey, photoMode)
+        // in Night mode the noise is removed by merging the burst, so the driver's own noise
+        // reduction is always off
+        val effective = if (mode == Mode.NIGHT) Detail.OFF else detail
+        val (noiseReduction, edge) = when (effective) {
+            Detail.OFF -> "off" to "off"
+            Detail.MINIMAL -> "minimal" to "off"
+            Detail.STANDARD -> CameraController.NOISE_REDUCTION_MODE_DEFAULT to CameraController.EDGE_MODE_DEFAULT
+        }
+        editor.putString(PreferenceKeys.CameraNoiseReductionModePreferenceKey, noiseReduction)
+        editor.putString(PreferenceKeys.EdgeModePreferenceKey, edge)
+    }
+
+    // ---- "Pro" manual parameters ----------------------------------------------------------
+
+    private fun focusKey(): String =
+        PreferenceKeys.getFocusPreferenceKey(activity.applicationInterface.cameraIdPref, false)
+
+    /** Leaving Pro: remember the manual parameters, and return the engine to fully automatic. */
+    private fun stashProSettings(editor: SharedPreferences.Editor) {
+        editor.putString(KEY_PRO_ISO, prefs.getString(PreferenceKeys.ISOPreferenceKey, CameraController.ISO_DEFAULT))
+        editor.putLong(KEY_PRO_SHUTTER, prefs.getLong(PreferenceKeys.ExposureTimePreferenceKey, CameraController.EXPOSURE_TIME_DEFAULT))
+        editor.putString(KEY_PRO_EV, prefs.getString(PreferenceKeys.ExposurePreferenceKey, "0"))
+        editor.putString(KEY_PRO_WB, prefs.getString(PreferenceKeys.WhiteBalancePreferenceKey, WB_AUTO))
+        editor.putBoolean(KEY_PRO_MF, prefs.getString(focusKey(), "") == FOCUS_MANUAL)
+
+        editor.remove(PreferenceKeys.ISOPreferenceKey)
+        editor.remove(PreferenceKeys.ExposureTimePreferenceKey)
+        editor.remove(PreferenceKeys.ExposurePreferenceKey)
+        editor.remove(PreferenceKeys.WhiteBalancePreferenceKey)
+        editor.putString(focusKey(), FOCUS_CONTINUOUS)
+        editor.putString(PreferenceKeys.FocusPeakingPreferenceKey, PEAKING_OFF)
+    }
+
+    /** Entering Pro: bring back the manual parameters used last time. */
+    private fun restoreProSettings(editor: SharedPreferences.Editor) {
+        val caps = _state.value.caps
+        val iso = prefs.getString(KEY_PRO_ISO, CameraController.ISO_DEFAULT) ?: CameraController.ISO_DEFAULT
+        if (caps.manualExposure && iso != CameraController.ISO_DEFAULT) {
+            editor.putString(PreferenceKeys.ISOPreferenceKey, iso)
+            editor.putLong(PreferenceKeys.ExposureTimePreferenceKey, prefs.getLong(KEY_PRO_SHUTTER, CameraController.EXPOSURE_TIME_DEFAULT))
+        } else {
+            editor.putString(PreferenceKeys.ExposurePreferenceKey, prefs.getString(KEY_PRO_EV, "0"))
+        }
+        val wb = prefs.getString(KEY_PRO_WB, WB_AUTO) ?: WB_AUTO
+        if (wb == "manual" && caps.wbKelvinValues.isNotEmpty() || wb in caps.wbPresets) {
+            editor.putString(PreferenceKeys.WhiteBalancePreferenceKey, wb)
+        }
+        if (caps.manualFocus && prefs.getBoolean(KEY_PRO_MF, false)) {
+            editor.putString(focusKey(), FOCUS_MANUAL)
+            editor.putString(PreferenceKeys.FocusPeakingPreferenceKey, PEAKING_ON)
+        }
+    }
+
+    /** Re-reads the manual parameters from the engine. */
+    private fun refreshPro() {
+        val preview = preview ?: return
+        val iso = prefs.getString(PreferenceKeys.ISOPreferenceKey, CameraController.ISO_DEFAULT) ?: CameraController.ISO_DEFAULT
+        val auto = iso == CameraController.ISO_DEFAULT || !_state.value.caps.manualExposure
+        val manualFocus = preview.currentFocusValue == FOCUS_MANUAL
+        _state.update {
+            it.copy(
+                pro = it.pro.copy(
+                    isoAuto = auto,
+                    shutterAuto = auto,
+                    iso = if (auto) 0 else preview.parseManualISOValue(iso).coerceAtLeast(0),
+                    shutterNs = if (auto) 0L else prefs.getLong(PreferenceKeys.ExposureTimePreferenceKey, CameraController.EXPOSURE_TIME_DEFAULT),
+                    ev = if (controller != null && preview.supportsExposures()) preview.currentExposure else 0,
+                    wb = controller?.whiteBalance ?: WB_AUTO,
+                    kelvin = prefs.getInt(PreferenceKeys.WhiteBalanceTemperaturePreferenceKey, 5000),
+                    focusAuto = !manualFocus,
+                    focusDistance = prefs.getFloat(PreferenceKeys.FocusDistancePreferenceKey, 0f),
+                )
+            )
+        }
+    }
+
+    /** Camera2 has a single switch for automatic exposure, so ISO and shutter speed are either
+     *  both automatic or both manual. Choosing a manual value for one of them fixes the other at
+     *  whatever the auto exposure was using at that moment.
+     */
+    fun setIso(iso: Int?) = setManualExposure(iso = iso, shutterNs = _state.value.pro.shutterNs.takeIf { !_state.value.pro.isoAuto }, autoRequested = iso == null)
+
+    fun setShutter(shutterNs: Long?) = setManualExposure(iso = _state.value.pro.iso.takeIf { !_state.value.pro.isoAuto }, shutterNs = shutterNs, autoRequested = shutterNs == null)
+
+    private fun setManualExposure(iso: Int?, shutterNs: Long?, autoRequested: Boolean) {
+        val preview = preview ?: return
+        val controller = controller ?: return
+        val s = _state.value
+        if (!s.caps.manualExposure) return
+        ZernoHooks.suppressToastsFor(TOAST_QUIET_MS)
+        if (autoRequested) {
+            if (s.pro.isoAuto) return
+            prefs.edit()
+                .remove(PreferenceKeys.ISOPreferenceKey)
+                .remove(PreferenceKeys.ExposureTimePreferenceKey)
+                .apply()
+            updateEngine()
+            return
+        }
+        if (s.pro.isoAuto) {
+            // auto -> manual: start from what the auto exposure is using right now
+            val newIso = iso
+                ?: (if (controller.captureResultHasIso()) controller.captureResultIso() else 400)
+            val newShutter = shutterNs
+                ?: (if (controller.captureResultHasExposureTime()) controller.captureResultExposureTime() else CameraController.EXPOSURE_TIME_DEFAULT)
+            prefs.edit()
+                .putString(PreferenceKeys.ISOPreferenceKey, newIso.coerceIn(preview.minimumISO, preview.maximumISO).toString())
+                .putLong(PreferenceKeys.ExposureTimePreferenceKey, newShutter.coerceIn(preview.minimumExposureTime, preview.maximumExposureTime))
+                .apply()
+            updateEngine()
+        } else {
+            // already manual: the engine can change these directly, without a camera restart
+            if (iso != null && iso != s.pro.iso) preview.setISO(iso)
+            if (shutterNs != null && shutterNs != s.pro.shutterNs) preview.setExposureTime(shutterNs)
+            refreshPro()
+        }
+    }
+
+    fun setEv(ev: Int) {
+        val preview = preview ?: return
+        if (_state.value.pro.evLocked) return
+        ZernoHooks.suppressToastsFor(TOAST_QUIET_MS)
+        preview.setExposure(ev)
+        refreshPro()
+    }
+
+    /** Selects a white balance preset (an engine value such as "auto" or "daylight"). */
+    fun setWhiteBalance(value: String) {
+        val controller = controller ?: return
+        controller.setWhiteBalance(value)
+        activity.applicationInterface.setWhiteBalancePref(value)
+        refreshPro()
+    }
+
+    /** Selects a manual white balance temperature, in kelvin. */
+    fun setKelvin(kelvin: Int) {
+        val preview = preview ?: return
+        val controller = controller ?: return
+        if (_state.value.caps.wbKelvinValues.isEmpty()) return
+        ZernoHooks.suppressToastsFor(TOAST_QUIET_MS)
+        if (controller.whiteBalance != "manual") {
+            controller.setWhiteBalance("manual")
+            activity.applicationInterface.setWhiteBalancePref("manual")
+        }
+        preview.setWhiteBalanceTemperature(kelvin)
+        refreshPro()
+    }
+
+    /** Sets the manual focus distance in dioptres (0 = infinity), or null for autofocus. Focus
+     *  peaking is switched on while focusing manually.
+     */
+    fun setFocusDistance(distance: Float?) {
+        val preview = preview ?: return
+        if (controller == null || !_state.value.caps.manualFocus) return
+        ZernoHooks.suppressToastsFor(TOAST_QUIET_MS)
+        val wasManual = preview.currentFocusValue == FOCUS_MANUAL
+        if (distance == null) {
+            if (wasManual) {
+                preview.updateFocus(FOCUS_CONTINUOUS, true, true)
+                setFocusPeaking(false)
+            }
+        } else {
+            if (!wasManual) {
+                preview.updateFocus(FOCUS_MANUAL, true, false)
+                setFocusPeaking(true)
+            }
+            preview.setFocusDistance(distance, false, false)
+        }
+        refreshPro()
+    }
+
+    private fun setFocusPeaking(on: Boolean) {
+        prefs.edit().putString(PreferenceKeys.FocusPeakingPreferenceKey, if (on) PEAKING_ON else PEAKING_OFF).apply()
+        activity.applicationInterface.drawPreview.updateSettings()
+    }
+
+    // ---- stored Zerno settings ------------------------------------------------------------
+
+    private fun storedMode(): Mode = enumPref(KEY_MODE, Mode.PHOTO).let {
+        // manual parameters are only kept in the engine while in Pro, so always start elsewhere
+        // in a consistent state: Pro is re-entered through applyMode()
+        it
+    }
+
+    private fun storedDetail(): Detail = enumPref(KEY_DETAIL, Detail.OFF)
+
+    private fun storedHdr(): Hdr = enumPref(KEY_HDR, Hdr.OFF)
+
+    private inline fun <reified T : Enum<T>> enumPref(key: String, default: T): T =
+        prefs.getString(key, null)?.let { name -> enumValues<T>().firstOrNull { it.name == name } } ?: default
+
+    private fun timerFromPref(): Timer {
+        val seconds = prefs.getString(PreferenceKeys.TimerPreferenceKey, "0")?.toIntOrNull() ?: 0
+        return Timer.entries.firstOrNull { it.seconds == seconds }
+            ?: if (seconds > 3) Timer.S10 else Timer.S3
+    }
+
+    companion object {
+        /** Height reserved for the top bar above the preview. */
+        const val TOP_BAR_DP = 56
+
+        private const val TOAST_QUIET_MS = 2500L
+
+        private const val KEY_DEFAULTS_DONE = "zerno_defaults_done"
+        private const val KEY_MODE = "zerno_mode"
+        private const val KEY_DETAIL = "zerno_detail"
+        private const val KEY_HDR = "zerno_hdr"
+        private const val KEY_PRO_ISO = "zerno_pro_iso"
+        private const val KEY_PRO_SHUTTER = "zerno_pro_shutter"
+        private const val KEY_PRO_EV = "zerno_pro_ev"
+        private const val KEY_PRO_WB = "zerno_pro_wb"
+        private const val KEY_PRO_MF = "zerno_pro_mf"
+
+        private const val GRID_NONE = "preference_grid_none"
+        private const val GRID_THIRDS = "preference_grid_3x3"
+        private const val PEAKING_ON = "preference_focus_peaking_on"
+        private const val PEAKING_OFF = "preference_focus_peaking_off"
+        private const val FOCUS_MANUAL = "focus_mode_manual2"
+        private const val FOCUS_CONTINUOUS = "focus_mode_continuous_picture"
+        const val WB_AUTO = "auto"
+
+        /** The white balance presets offered, in display order (engine values). */
+        val WB_PRESETS = listOf(WB_AUTO, "daylight", "cloudy-daylight", "incandescent", "fluorescent")
+    }
+}

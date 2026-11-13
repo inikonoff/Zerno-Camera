@@ -330,6 +330,8 @@ public class MainActivity extends AppCompatActivity implements PreferenceFragmen
             // must be done after initCamera2Support()
             setDeviceDefaults();
         }
+        // Zerno: let the adapter set its preference defaults before the camera is opened
+        ZernoHooks.beforePreviewCreated(this, !has_done_first_time);
 
         boolean settings_is_open = settingsIsOpen();
         if( MyDebug.LOG )
@@ -539,7 +541,7 @@ public class MainActivity extends AppCompatActivity implements PreferenceFragmen
 
         // show "about" dialog for first time use
         if( !has_done_first_time ) {
-            if( !is_test ) {
+            if( !is_test && !ZernoHooks.ZERNO_UI ) { // Zerno: no Open Camera intro dialog
                 AlertDialog.Builder alertDialog = new AlertDialog.Builder(this);
                 alertDialog.setTitle(R.string.app_name);
                 alertDialog.setMessage(R.string.intro_text);
@@ -593,7 +595,7 @@ public class MainActivity extends AppCompatActivity implements PreferenceFragmen
                     if( MyDebug.LOG )
                         Log.d(TAG, "allow_show_whats_new: " + allow_show_whats_new);
                     // don't show What's New if this is the first time the user has run
-                    if( has_done_first_time && allow_show_whats_new && ( force_whats_new || whats_new_version > latest_version ) ) {
+                    if( !ZernoHooks.ZERNO_UI && has_done_first_time && allow_show_whats_new && ( force_whats_new || whats_new_version > latest_version ) ) { // Zerno: no Open Camera "What's New" dialog
                         AlertDialog.Builder alertDialog = new AlertDialog.Builder(this);
                         alertDialog.setTitle(R.string.whats_new);
                         alertDialog.setMessage(R.string.whats_new_text);
@@ -667,6 +669,9 @@ public class MainActivity extends AppCompatActivity implements PreferenceFragmen
         // so we get the icons rotation even when rotating for the first time - see onSystemOrientationChanged
         this.hasOldSystemOrientation = true;
         this.oldSystemOrientation = getSystemOrientation();
+
+        // Zerno: attach the Compose UI
+        ZernoHooks.activityCreated(this);
 
         if( MyDebug.LOG )
             Log.d(TAG, "onCreate: total time for Activity startup: " + (System.currentTimeMillis() - debug_time));
@@ -1027,6 +1032,7 @@ public class MainActivity extends AppCompatActivity implements PreferenceFragmen
         activity_count--;
         if( MyDebug.LOG )
             Log.d(TAG, "activity_count: " + activity_count);
+        ZernoHooks.activityDestroyed(this); // Zerno
 
         // should do asap before waiting for images to be saved - as risk the application will be killed whilst waiting for that to happen,
         // and we want to avoid notifications hanging around
@@ -3827,7 +3833,8 @@ public class MainActivity extends AppCompatActivity implements PreferenceFragmen
         }
         else {
             // allow orientation to change for camera, even if user has locked orientation
-            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR);
+            // Zerno: the camera screen is locked to portrait; the Compose UI rotates its own icons instead
+            setRequestedOrientation(ZernoHooks.ZERNO_UI ? ActivityInfo.SCREEN_ORIENTATION_PORTRAIT : ActivityInfo.SCREEN_ORIENTATION_SENSOR);
         }
         if( preview != null ) {
             // also need to call preview.setCameraDisplayOrientation, as this handles if the user switched from portrait to reverse landscape whilst in settings/etc
@@ -3920,7 +3927,7 @@ public class MainActivity extends AppCompatActivity implements PreferenceFragmen
         }
 
         // allow screen rotation
-        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        setRequestedOrientation(ZernoHooks.ZERNO_UI ? ActivityInfo.SCREEN_ORIENTATION_PORTRAIT : ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED); // Zerno: portrait only
 
         // revert to standard screen blank behaviour
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -3997,6 +4004,7 @@ public class MainActivity extends AppCompatActivity implements PreferenceFragmen
             Log.d(TAG, "showPreview: " + show);
         final ViewGroup container = findViewById(R.id.hide_container);
         container.setVisibility(show ? View.GONE : View.VISIBLE);
+        ZernoHooks.settingsVisible(this, !show); // Zerno
     }
 
     /** Loads a thumbnail from the supplied image uri (not videos). Note this loads from the bitmap
@@ -4090,6 +4098,7 @@ public class MainActivity extends AppCompatActivity implements PreferenceFragmen
         // workaround for setImageResource also resetting padding, Android bug
         galleryButton.setPadding(left, top, right, bottom);
         gallery_bitmap = null;
+        ZernoHooks.galleryThumbnail(this, null); // Zerno
     }
 
     /** Shows a thumbnail for the gallery icon.
@@ -4109,6 +4118,7 @@ public class MainActivity extends AppCompatActivity implements PreferenceFragmen
         ImageButton galleryButton = this.findViewById(R.id.gallery);
         galleryButton.setImageBitmap(thumbnail);
         gallery_bitmap = thumbnail;
+        ZernoHooks.galleryThumbnail(this, thumbnail); // Zerno
     }
 
     /** Updates the gallery icon by searching for the most recent photo.
@@ -5318,7 +5328,7 @@ public class MainActivity extends AppCompatActivity implements PreferenceFragmen
         if( MyDebug.LOG )
             Log.d(TAG, "cameraSetup: time after setting take photo icon: " + (System.currentTimeMillis() - debug_time));
 
-        if( !block_startup_toast ) {
+        if( !block_startup_toast && !ZernoHooks.ZERNO_UI ) { // Zerno: no startup toast, the Compose UI shows the current mode
             this.showPhotoVideoToast(false);
         }
         block_startup_toast = false;
@@ -5332,6 +5342,8 @@ public class MainActivity extends AppCompatActivity implements PreferenceFragmen
             View switchCameraButton = findViewById(R.id.switch_camera);
             switchCameraButton.animate().rotationBy(180).setDuration(250).setInterpolator(new AccelerateDecelerateInterpolator()).start();
         }
+
+        ZernoHooks.cameraSetup(this); // Zerno
     }
 
     /** For Camera2 only. Sets whether the zoom ratios should be sticky or not (see documentation of

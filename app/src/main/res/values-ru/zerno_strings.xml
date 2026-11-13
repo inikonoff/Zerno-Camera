@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="zerno_mode_night">НОЧЬ</string>
+    <string name="zerno_mode_photo">ФОТО</string>
+    <string name="zerno_mode_pro">ПРОФИ</string>
+
+    <string name="zerno_detail">Детализация</string>
+    <string name="zerno_detail_off">Выкл</string>
+    <string name="zerno_detail_minimal">Минимум</string>
+    <string name="zerno_detail_standard">Стандарт</string>
+    <string name="zerno_hdr">HDR</string>
+    <string name="zerno_hdr_off">Выкл</string>
+    <string name="zerno_hdr_dro">DRO</string>
+    <string name="zerno_hdr_hdr">HDR</string>
+    <string name="zerno_grid">Сетка</string>
+    <string name="zerno_level">Уровень</string>
+    <string name="zerno_timer">Таймер</string>
+    <string name="zerno_timer_off">Выкл</string>
+    <string name="zerno_timer_seconds">%d с</string>
+    <string name="zerno_settings">Настройки</string>
+
+    <string name="zerno_shutter">Сделать снимок</string>
+    <string name="zerno_gallery">Галерея</string>
+    <string name="zerno_switch_camera">Переключить камеру</string>
+    <string name="zerno_hold_still">Держите телефон неподвижно</string>
+
+    <string name="zerno_auto">АВТО</string>
+    <string name="zerno_auto_short">A</string>
+    <string name="zerno_ev_locked">EV недоступна, пока ISO или выдержка заданы вручную</string>
+    <string name="zerno_wb_auto">Авто</string>
+    <string name="zerno_wb_daylight">Солнце</string>
+    <string name="zerno_wb_cloudy">Облачно</string>
+    <string name="zerno_wb_incandescent">Лампа</string>
+    <string name="zerno_wb_fluorescent">Люмин.</string>
+</resources>

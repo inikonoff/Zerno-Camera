@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Zerno: strings of the Zerno UI layer (the Open Camera engine keeps its own strings.xml) -->
+<resources>
+    <string name="zerno_mode_night">NIGHT</string>
+    <string name="zerno_mode_photo">PHOTO</string>
+    <string name="zerno_mode_pro">PRO</string>
+
+    <string name="zerno_detail">Detail</string>
+    <string name="zerno_detail_off">Off</string>
+    <string name="zerno_detail_minimal">Minimal</string>
+    <string name="zerno_detail_standard">Standard</string>
+    <string name="zerno_hdr">HDR</string>
+    <string name="zerno_hdr_off">Off</string>
+    <string name="zerno_hdr_dro">DRO</string>
+    <string name="zerno_hdr_hdr">HDR</string>
+    <string name="zerno_grid">Grid</string>
+    <string name="zerno_level">Level</string>
+    <string name="zerno_timer">Timer</string>
+    <string name="zerno_timer_off">Off</string>
+    <string name="zerno_timer_seconds">%d s</string>
+    <string name="zerno_settings">Settings</string>
+
+    <string name="zerno_shutter">Take photo</string>
+    <string name="zerno_gallery">Gallery</string>
+    <string name="zerno_switch_camera">Switch camera</string>
+    <string name="zerno_hold_still">Hold the phone still</string>
+
+    <string name="zerno_auto">AUTO</string>
+    <string name="zerno_auto_short">A</string>
+    <string name="zerno_ev_locked">EV is locked while ISO or shutter speed is manual</string>
+    <string name="zerno_wb_auto">Auto</string>
+    <string name="zerno_wb_daylight">Sun</string>
+    <string name="zerno_wb_cloudy">Cloudy</string>
+    <string name="zerno_wb_incandescent">Lamp</string>
+    <string name="zerno_wb_fluorescent">Fluor.</string>
+</resources>
