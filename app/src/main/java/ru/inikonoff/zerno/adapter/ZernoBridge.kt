@@ -26,6 +26,7 @@ object ZernoBridge : ZernoHooks.Listener {
         adapters.getOrPut(activity) { CameraAdapter(activity) }
 
     override fun onBeforePreviewCreated(activity: MainActivity, first_run: Boolean) {
+        CrashLog.install(activity.applicationContext)
         adapterFor(activity).prepareEnginePreferences(first_run)
     }
 
@@ -33,6 +34,7 @@ object ZernoBridge : ZernoHooks.Listener {
         val adapter = adapterFor(activity)
         val composeView = activity.findViewById<ComposeView>(R.id.zerno_ui)
         composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        adapter.loadCrashReport()
         composeView.setContent { ZernoScreen(adapter) }
 
         activity.lifecycleScope.launch {

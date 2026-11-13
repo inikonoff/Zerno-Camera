@@ -113,6 +113,8 @@ data class UiState(
     /** How far the device is rotated from portrait (0, 90, 180 or 270): icons counter-rotate. */
     val uiRotation: Int = 0,
     val settingsOpen: Boolean = false,
+    /** The stack trace of the crash that ended the previous run, if it hasn't been dismissed. */
+    val crashReport: String? = null,
     /** Vertical extent of the camera preview within the window, in pixels (0 if not yet known). */
     val previewTop: Int = 0,
     val previewBottom: Int = 0,

@@ -79,4 +79,7 @@
     <string name="zerno_qr_connect">Подключиться</string>
     <string name="zerno_qr_close">Закрыть</string>
     <string name="zerno_qr_no_app">Нет приложения, которое может это открыть</string>
+    <string name="zerno_crash_title">В прошлый раз Zerno закрылось с ошибкой</string>
+    <string name="zerno_crash_text">В отчёте описано, что пошло не так. Он остаётся на телефоне, пока вы сами его не скопируете или не отправите.</string>
+    <string name="zerno_crash_share">Отправить</string>
 </resources>

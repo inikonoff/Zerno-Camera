@@ -156,5 +156,7 @@ fun ZernoScreen(adapter: CameraAdapter) {
         if (qr != null && sheetOpen) {
             QrSheet(qr) { sheetOpen = false; adapter.setQrPinned(false) }
         }
+
+        state.crashReport?.let { CrashSheet(it, onClose = adapter::dismissCrashReport) }
     }
 }

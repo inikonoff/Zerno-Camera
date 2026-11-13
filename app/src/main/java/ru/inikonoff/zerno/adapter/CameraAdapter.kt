@@ -321,7 +321,34 @@ class CameraAdapter(private val activity: MainActivity) {
 
     fun openSettings() = activity.openSettings()
 
-    fun onGalleryThumbnail(thumbnail: Bitmap?) = _state.update { it.copy(thumbnail = thumbnail) }
+    /** The engine owns its thumbnail bitmaps and recycles each one as soon as the next photo's
+     *  thumbnail arrives - which can happen while Compose is still drawing the old one (drawing
+     *  a recycled bitmap crashes the app). So the UI gets its own private copy.
+     */
+    fun onGalleryThumbnail(thumbnail: Bitmap?) {
+        val copy = try {
+            if (thumbnail == null || thumbnail.isRecycled) null
+            else thumbnail.copy(thumbnail.config ?: Bitmap.Config.ARGB_8888, false)
+        } catch (e: RuntimeException) {
+            null
+        } catch (e: OutOfMemoryError) {
+            null
+        }
+        _state.update { it.copy(thumbnail = copy) }
+    }
+
+    // ---- crash reports --------------------------------------------------------------------
+
+    /** Shows the report of the previous crash, if there was one. */
+    fun loadCrashReport() {
+        val report = CrashLog.read(activity) ?: return
+        _state.update { it.copy(crashReport = report) }
+    }
+
+    fun dismissCrashReport() {
+        CrashLog.clear(activity)
+        _state.update { it.copy(crashReport = null) }
+    }
 
     fun onSettingsVisible(visible: Boolean) = _state.update { it.copy(settingsOpen = visible) }
 

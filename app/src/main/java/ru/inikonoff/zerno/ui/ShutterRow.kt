@@ -159,7 +159,7 @@ private fun Thumbnail(state: UiState, onClick: () -> Unit) {
     ) {
         val bitmap = state.thumbnail
         if (bitmap != null && !bitmap.isRecycled) {
-            Image(bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            Image(remember(bitmap) { bitmap.asImageBitmap() }, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         } else {
             ZIcon(ZernoIcon.GALLERY, ZernoColors.Dim, Modifier.size(24.dp))
         }

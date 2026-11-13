@@ -80,4 +80,7 @@
     <string name="zerno_qr_connect">Connect</string>
     <string name="zerno_qr_close">Close</string>
     <string name="zerno_qr_no_app">No app can open this</string>
+    <string name="zerno_crash_title">Zerno closed unexpectedly last time</string>
+    <string name="zerno_crash_text">This report describes what went wrong. It stays on the phone unless you copy or share it.</string>
+    <string name="zerno_crash_share">Share</string>
 </resources>
