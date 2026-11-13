@@ -24,3 +24,8 @@ testdata/
 
 local.properties
 uninstall.bat
+
+# Zerno: signing secrets, never commit
+keystore/
+keystore.properties
+dist/
