@@ -24,7 +24,7 @@ import ru.inikonoff.zerno.adapter.CameraAdapter
 import ru.inikonoff.zerno.adapter.Scales
 import ru.inikonoff.zerno.adapter.UiState
 
-private enum class Param(val title: String) { ISO("ISO"), S("S"), EV("EV"), WB("WB"), MF("MF") }
+enum class ProParam(val title: String) { ISO("ISO"), S("S"), EV("EV"), WB("WB"), MF("MF") }
 
 @Composable
 private fun wbName(value: String): String = when (value) {
@@ -40,16 +40,21 @@ private fun wbName(value: String): String = when (value) {
  *  for it underneath.
  */
 @Composable
-fun ProPanel(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifier) {
+fun ProPanel(
+    state: UiState,
+    adapter: CameraAdapter,
+    selected: ProParam?,
+    onSelect: (ProParam?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val caps = state.caps
     val pro = state.pro
     val params = buildList {
-        if (caps.manualExposure) { add(Param.ISO); add(Param.S) }
-        if (caps.hasEv) add(Param.EV)
-        if (caps.wbPresets.size > 1 || caps.wbKelvinValues.isNotEmpty()) add(Param.WB)
-        if (caps.manualFocus) add(Param.MF)
+        if (caps.manualExposure) { add(ProParam.ISO); add(ProParam.S) }
+        if (caps.hasEv) add(ProParam.EV)
+        if (caps.wbPresets.size > 1 || caps.wbKelvinValues.isNotEmpty()) add(ProParam.WB)
+        if (caps.manualFocus) add(ProParam.MF)
     }
-    var selected by remember { mutableStateOf<Param?>(null) }
     val open = selected.takeIf { it in params }
     val auto = stringResource(R.string.zerno_auto)
     val autoShort = stringResource(R.string.zerno_auto_short)
@@ -61,18 +66,18 @@ fun ProPanel(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifi
         ) {
             for (param in params) {
                 val value = when (param) {
-                    Param.ISO -> if (pro.isoAuto) autoShort + (if (pro.liveIso > 0) " ${pro.liveIso}" else "") else pro.iso.toString()
-                    Param.S -> if (pro.shutterAuto) autoShort + (if (pro.liveShutterNs > 0) " ${Scales.formatShutter(pro.liveShutterNs)}" else "") else Scales.formatShutter(pro.shutterNs)
-                    Param.EV -> Scales.formatEv(pro.ev, caps.evStep)
-                    Param.WB -> if (pro.wb == "manual") "${pro.kelvin}K" else wbName(pro.wb)
-                    Param.MF -> if (pro.focusAuto) "AF" else Scales.formatFocus(pro.focusDistance)
+                    ProParam.ISO -> if (pro.isoAuto) autoShort + (if (pro.liveIso > 0) " ${pro.liveIso}" else "") else pro.iso.toString()
+                    ProParam.S -> if (pro.shutterAuto) autoShort + (if (pro.liveShutterNs > 0) " ${Scales.formatShutter(pro.liveShutterNs)}" else "") else Scales.formatShutter(pro.shutterNs)
+                    ProParam.EV -> Scales.formatEv(pro.ev, caps.evStep)
+                    ProParam.WB -> if (pro.wb == "manual") "${pro.kelvin}K" else wbName(pro.wb)
+                    ProParam.MF -> if (pro.focusAuto) "AF" else Scales.formatFocus(pro.focusDistance)
                 }
-                val locked = param == Param.EV && pro.evLocked
+                val locked = param == ProParam.EV && pro.evLocked
                 val isOpen = param == open
                 Column(
                     Modifier
                         .widthIn(min = 56.dp)
-                        .tap { selected = if (isOpen) null else param }
+                        .tap { onSelect(if (isOpen) null else param) }
                         .padding(vertical = 6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
@@ -93,17 +98,17 @@ fun ProPanel(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifi
 
         when (open) {
             null -> {}
-            Param.ISO -> DrumRuler(
+            ProParam.ISO -> DrumRuler(
                 labels = listOf(auto) + caps.isoValues.map { it.toString() },
                 selectedIndex = if (pro.isoAuto) 0 else 1 + Scales.nearestLogIndex(caps.isoValues, pro.iso),
                 onSelect = { adapter.setIso(if (it == 0) null else caps.isoValues[it - 1]) },
             )
-            Param.S -> DrumRuler(
+            ProParam.S -> DrumRuler(
                 labels = listOf(auto) + caps.shutterValues.map { Scales.formatShutter(it) },
                 selectedIndex = if (pro.shutterAuto) 0 else 1 + Scales.nearestLogIndex(caps.shutterValues, pro.shutterNs),
                 onSelect = { adapter.setShutter(if (it == 0) null else caps.shutterValues[it - 1]) },
             )
-            Param.EV -> if (pro.evLocked) {
+            ProParam.EV -> if (pro.evLocked) {
                 Box(Modifier.fillMaxWidth().height(52.dp), contentAlignment = Alignment.Center) {
                     Label(stringResource(R.string.zerno_ev_locked), color = ZernoColors.Dim, size = 12.sp)
                 }
@@ -114,7 +119,7 @@ fun ProPanel(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifi
                     onSelect = { adapter.setEv(caps.evMin + it) },
                 )
             }
-            Param.WB -> {
+            ProParam.WB -> {
                 val presets = caps.wbPresets
                 val kelvins = caps.wbKelvinValues
                 DrumRuler(
@@ -125,7 +130,7 @@ fun ProPanel(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifi
                     onSelect = { if (it < presets.size) adapter.setWhiteBalance(presets[it]) else adapter.setKelvin(kelvins[it - presets.size]) },
                 )
             }
-            Param.MF -> DrumRuler(
+            ProParam.MF -> DrumRuler(
                 labels = listOf(auto) + (0..Scales.FOCUS_STEPS).map { Scales.formatFocus(Scales.focusDistanceAt(it, caps.minFocusDistance)) },
                 selectedIndex = if (pro.focusAuto) 0 else 1 + Scales.focusIndexOf(pro.focusDistance, caps.minFocusDistance),
                 onSelect = { adapter.setFocusDistance(if (it == 0) null else Scales.focusDistanceAt(it - 1, caps.minFocusDistance)) },

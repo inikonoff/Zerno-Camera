@@ -46,30 +46,96 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import net.sourceforge.opencamera.R
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import ru.inikonoff.zerno.adapter.CameraAdapter
+import ru.inikonoff.zerno.adapter.Focus
+import ru.inikonoff.zerno.adapter.Scales
 import ru.inikonoff.zerno.adapter.UiState
 
 /** The bottom row: last photo (opens the gallery), shutter, switch between rear and front camera. */
 @Composable
-fun ShutterRow(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifier) {
+fun ShutterRow(
+    state: UiState,
+    adapter: CameraAdapter,
+    exposureOpen: Boolean,
+    focusOpen: Boolean,
+    onExposure: () -> Unit,
+    onFocus: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Row(
-        modifier.fillMaxWidth().padding(horizontal = 28.dp),
+        modifier.fillMaxWidth().padding(horizontal = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Thumbnail(state, onClick = adapter::openGallery)
+        // exposure compensation, to the left of the shutter
+        SideButton(
+            visible = state.caps.hasEv,
+            description = stringResource(R.string.zerno_exposure),
+            active = exposureOpen || state.pro.ev != 0,
+            onClick = onExposure,
+        ) { tint ->
+            if (state.pro.ev != 0) {
+                Label(Scales.formatEv(state.pro.ev, state.caps.evStep), Modifier.upright(state.uiRotation), color = tint, size = 12.sp, weight = FontWeight.Bold)
+            } else {
+                ZIcon(ZernoIcon.EXPOSURE, tint, Modifier.size(22.dp))
+            }
+        }
         ShutterButton(
             enabled = state.cameraOpen,
             busy = state.takingPhoto && !state.onTimer,
             onTimer = state.onTimer,
             onClick = adapter::takePhoto,
         )
+        // focus mode, to the right of the shutter
+        SideButton(
+            visible = state.caps.focusModes.isNotEmpty(),
+            description = stringResource(R.string.zerno_focus),
+            active = focusOpen || state.focusMode != Focus.CONTINUOUS,
+            onClick = onFocus,
+        ) { tint ->
+            Label(focusShortName(state.focusMode), Modifier.upright(state.uiRotation), color = tint, size = 12.sp, weight = FontWeight.Bold)
+        }
         SwitchCameraButton(
             visible = state.caps.canSwitchCamera,
             enabled = state.cameraOpen && !state.takingPhoto,
             uiRotation = state.uiRotation,
             onClick = adapter::switchCamera,
         )
+    }
+}
+
+/** Short names of the focus modes, as shown on the focus button. */
+fun focusShortName(mode: String): String = when (mode) {
+    Focus.CONTINUOUS -> "AF-C"
+    Focus.AUTO -> "AF-S"
+    Focus.MACRO -> "MACRO"
+    Focus.INFINITY -> "∞"
+    Focus.MANUAL -> "MF"
+    else -> "AF"
+}
+
+@Composable
+private fun SideButton(
+    visible: Boolean,
+    description: String,
+    active: Boolean,
+    onClick: () -> Unit,
+    content: @Composable (tint: Color) -> Unit,
+) {
+    Box(
+        Modifier
+            .size(44.dp)
+            .alpha(if (visible) 1f else 0f)
+            .clip(CircleShape)
+            .background(ZernoColors.Chip)
+            .semantics { contentDescription = description }
+            .tap(enabled = visible, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        content(if (active) ZernoColors.Accent else ZernoColors.OnPreview)
     }
 }
 

@@ -4,6 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -27,12 +31,14 @@ import androidx.compose.ui.unit.sp
 import net.sourceforge.opencamera.R
 import ru.inikonoff.zerno.adapter.CameraAdapter
 import ru.inikonoff.zerno.adapter.Detail
+import ru.inikonoff.zerno.adapter.Flash
 import ru.inikonoff.zerno.adapter.Hdr
 import ru.inikonoff.zerno.adapter.Mode
+import ru.inikonoff.zerno.adapter.Ratio
 import ru.inikonoff.zerno.adapter.Timer
 import ru.inikonoff.zerno.adapter.UiState
 
-private enum class Chooser { DETAIL, HDR, TIMER }
+private enum class Chooser { DETAIL, HDR, FLASH, RATIO, TIMER }
 
 /** The top bar: quick switches. A switch with two positions toggles in place; one with three
  *  positions opens a row of choices in place of the bar.
@@ -47,6 +53,8 @@ fun TopBar(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifier
         when (it) {
             Chooser.DETAIL -> showDetail
             Chooser.HDR -> showHdr
+            Chooser.FLASH -> state.caps.flashes.isNotEmpty()
+            Chooser.RATIO -> state.caps.ratios.isNotEmpty()
             else -> true
         }
     }
@@ -54,15 +62,20 @@ fun TopBar(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifier
     Box(modifier, contentAlignment = Alignment.Center) {
         when (open) {
             null -> Row(
-                Modifier.fillMaxSize().padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                Modifier.fillMaxSize().padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (state.caps.flashes.isNotEmpty()) {
+                    BarIcon(flashIcon(state.flash), stringResource(R.string.zerno_flash), state.flash != Flash.OFF, state.uiRotation) { chooser = Chooser.FLASH }
+                }
                 if (showDetail) {
                     BarIcon(ZernoIcon.DETAIL, stringResource(R.string.zerno_detail), state.detail != Detail.STANDARD, state.uiRotation) { chooser = Chooser.DETAIL }
                 }
                 if (showHdr) {
                     BarIcon(ZernoIcon.HDR, stringResource(R.string.zerno_hdr), state.hdr != Hdr.OFF, state.uiRotation) { chooser = Chooser.HDR }
+                }
+                if (state.caps.ratios.isNotEmpty()) {
+                    BarText(state.ratio?.label ?: "–", stringResource(R.string.zerno_ratio), state.uiRotation) { chooser = Chooser.RATIO }
                 }
                 BarIcon(ZernoIcon.GRID, stringResource(R.string.zerno_grid), state.grid, state.uiRotation) { adapter.setGrid(!state.grid) }
                 BarIcon(ZernoIcon.LEVEL, stringResource(R.string.zerno_level), state.level, state.uiRotation) { adapter.setLevel(!state.level) }
@@ -97,6 +110,27 @@ fun TopBar(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifier
                 selected = state.hdr,
                 onClose = { chooser = null },
             ) { adapter.setHdr(it); chooser = null }
+            Chooser.FLASH -> ChoiceRow(
+                title = stringResource(R.string.zerno_flash),
+                options = state.caps.flashes.map {
+                    it to stringResource(
+                        when (it) {
+                            Flash.AUTO, Flash.SCREEN_AUTO -> R.string.zerno_flash_auto
+                            Flash.ON, Flash.SCREEN_ON -> R.string.zerno_flash_on
+                            Flash.TORCH, Flash.SCREEN_TORCH -> R.string.zerno_flash_torch
+                            else -> R.string.zerno_flash_off
+                        }
+                    )
+                },
+                selected = state.flash,
+                onClose = { chooser = null },
+            ) { adapter.setFlash(it); chooser = null }
+            Chooser.RATIO -> ChoiceRow(
+                title = stringResource(R.string.zerno_ratio),
+                options = state.caps.ratios.map<Ratio, Pair<Ratio?, String>> { it to it.label },
+                selected = state.ratio,
+                onClose = { chooser = null },
+            ) { if (it != null) adapter.setRatio(it); chooser = null }
             Chooser.TIMER -> ChoiceRow(
                 title = stringResource(R.string.zerno_timer),
                 options = Timer.entries.map {
@@ -110,11 +144,34 @@ fun TopBar(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifier
     }
 }
 
+private fun flashIcon(flash: String): ZernoIcon = when (flash) {
+    Flash.AUTO, Flash.SCREEN_AUTO -> ZernoIcon.FLASH_AUTO
+    Flash.ON, Flash.SCREEN_ON -> ZernoIcon.FLASH_ON
+    Flash.TORCH, Flash.SCREEN_TORCH -> ZernoIcon.TORCH
+    else -> ZernoIcon.FLASH_OFF
+}
+
+/** A top bar item that shows its current value as text (the aspect ratio). */
 @Composable
-private fun BarIcon(icon: ZernoIcon, description: String, active: Boolean, uiRotation: Int, onClick: () -> Unit) {
+private fun RowScope.BarText(text: String, description: String, uiRotation: Int, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(48.dp)
+            .weight(1f)
+            .height(48.dp)
+            .semantics { contentDescription = description }
+            .tap(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Label(text, Modifier.upright(uiRotation), size = 13.sp, weight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun RowScope.BarIcon(icon: ZernoIcon, description: String, active: Boolean, uiRotation: Int, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .weight(1f)
+            .height(48.dp)
             .semantics { contentDescription = description }
             .tap(onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -132,12 +189,12 @@ private fun <T> ChoiceRow(
     onSelect: (T) -> Unit,
 ) {
     Row(
-        Modifier.fillMaxSize().tap(onClick = onClose).padding(horizontal = 12.dp),
+        Modifier.fillMaxSize().tap(onClick = onClose).horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Label(title, color = ZernoColors.Dim, size = 13.sp)
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(8.dp))
         for ((value, name) in options) {
             val isSelected = value == selected
             Box(
@@ -146,7 +203,7 @@ private fun <T> ChoiceRow(
                     .clip(RoundedCornerShape(50))
                     .background(if (isSelected) ZernoColors.Accent.copy(alpha = 0.22f) else ZernoColors.Chip)
                     .tap { onSelect(value) }
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
             ) {
                 Label(
                     name,

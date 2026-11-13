@@ -20,6 +20,13 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import kotlin.math.roundToInt
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +41,13 @@ import net.sourceforge.opencamera.R
 import ru.inikonoff.zerno.adapter.CameraAdapter
 import ru.inikonoff.zerno.adapter.Mode
 
+/** The panel currently open above the mode carousel, if any. */
+private sealed interface Panel {
+    data class Pro(val param: ProParam) : Panel
+    data object Exposure : Panel
+    data object Focus : Panel
+}
+
 /** The whole camera screen, drawn over the engine's live preview. Anything not covered by a
  *  control lets touches through to the preview (tap to focus and meter, pinch to zoom).
  */
@@ -41,6 +55,9 @@ import ru.inikonoff.zerno.adapter.Mode
 fun ZernoScreen(adapter: CameraAdapter) {
     val state by adapter.state.collectAsStateWithLifecycle()
     if (state.settingsOpen) return
+    var panel by remember { mutableStateOf<Panel?>(null) }
+    var controlsTop by remember { mutableIntStateOf(0) }
+    var sheetOpen by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize()) {
         // top bar
@@ -70,31 +87,74 @@ fun ZernoScreen(adapter: CameraAdapter) {
         }
 
         // bottom controls
+        val effectivePanel = panel.takeIf { it !is Panel.Pro || state.mode == Mode.PRO }
         Column(
             Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(0f to Color.Transparent, 0.4f to Color(0x73000000), 1f to Color(0x99000000)))
+                .onGloballyPositioned { controlsTop = it.positionInRoot().y.roundToInt() }
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(Modifier.height(12.dp))
-            if (state.mode == Mode.PRO) {
-                ProPanel(state, adapter)
+            // the panels open upwards, over the bottom of the preview
+            Column(Modifier.fillMaxWidth().background(Color(0x66000000))) {
+                if (state.mode == Mode.PRO) {
+                    ProPanel(
+                        state, adapter,
+                        selected = (effectivePanel as? Panel.Pro)?.param,
+                        onSelect = { panel = it?.let(Panel::Pro) },
+                    )
+                }
+                when (effectivePanel) {
+                    Panel.Exposure -> ExposurePanel(state, adapter)
+                    Panel.Focus -> FocusPanel(state, adapter)
+                    else -> {}
+                }
             }
-            if (state.caps.hasZoom && state.caps.zoomMax > state.caps.zoomMin) {
-                ZoomControl(
-                    zoom = state.zoom.coerceIn(state.caps.zoomMin, state.caps.zoomMax),
-                    min = state.caps.zoomMin,
-                    max = state.caps.zoomMax,
-                    uiRotation = state.uiRotation,
-                    onZoom = adapter::setZoom,
-                )
-            }
+            Spacer(Modifier.height(4.dp))
             ModeCarousel(state.caps.modes, state.mode, adapter::setMode)
             Spacer(Modifier.height(6.dp))
-            ShutterRow(state, adapter)
+            ShutterRow(
+                state, adapter,
+                exposureOpen = effectivePanel == Panel.Exposure || effectivePanel == Panel.Pro(ProParam.EV),
+                focusOpen = effectivePanel == Panel.Focus,
+                onExposure = {
+                    // in Pro, exposure compensation lives in the Pro row
+                    val target = if (state.mode == Mode.PRO) Panel.Pro(ProParam.EV) else Panel.Exposure
+                    panel = if (effectivePanel == target) null else target
+                },
+                onFocus = { panel = if (effectivePanel == Panel.Focus) null else Panel.Focus },
+            )
             Spacer(Modifier.height(22.dp))
+        }
+
+        // zoom sits on the preview, just above its bottom edge (or above the controls, if
+        // those reach higher)
+        if (state.caps.hasZoom && state.caps.zoomMax > state.caps.zoomMin && controlsTop > 0) {
+            val anchor = if (state.previewBottom > 0) minOf(state.previewBottom, controlsTop) else controlsTop
+            ZoomControl(
+                zoom = state.zoom.coerceIn(state.caps.zoomMin, state.caps.zoomMax),
+                min = state.caps.zoomMin,
+                max = state.caps.zoomMax,
+                uiRotation = state.uiRotation,
+                onZoom = adapter::setZoom,
+                modifier = Modifier.align(Alignment.TopCenter).offset { IntOffset(0, anchor - 76.dp.roundToPx()) },
+            )
+        }
+
+        // a QR code in view
+        val qr = state.qr
+        if (qr != null && !sheetOpen) {
+            val top = if (state.previewTop > 0) state.previewTop else 0
+            QrChip(
+                qr,
+                onClick = { sheetOpen = true; adapter.setQrPinned(true) },
+                modifier = Modifier.align(Alignment.TopCenter).offset { IntOffset(0, top + 14.dp.roundToPx()) }
+                    .then(if (state.previewTop > 0) Modifier else Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)).padding(top = CameraAdapter.TOP_BAR_DP.dp)),
+            )
+        }
+        if (qr != null && sheetOpen) {
+            QrSheet(qr) { sheetOpen = false; adapter.setQrPinned(false) }
         }
     }
 }

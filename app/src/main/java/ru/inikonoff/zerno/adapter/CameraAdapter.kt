@@ -5,7 +5,9 @@ import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import android.preference.PreferenceManager
+import android.os.SystemClock
 import android.view.OrientationEventListener
+import android.view.TextureView
 import android.view.View
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -42,6 +44,12 @@ class CameraAdapter(private val activity: MainActivity) {
     private val controller: CameraController? get() = activity.preview?.cameraController
 
     private var zoomRatios: List<Float> = emptyList()
+    private var ratioSizes: Map<Ratio, CameraController.Size> = emptyMap()
+
+    private val qrScanner = QrScanner()
+    private var qrLastSeen = 0L
+    private var qrPinned = false // the QR sheet is open: keep the result, and don't scan
+    private var pollCount = 0
 
     /** How far the device is turned clockwise from portrait, snapped to 0/90/180/270. The camera
      *  screen is locked to portrait, so the UI turns its icons itself.
@@ -160,12 +168,23 @@ class CameraAdapter(private val activity: MainActivity) {
             val hi = preview.maximumWhiteBalanceTemperature / 100 * 100
             if (hi > lo) (lo..hi step 100).toList() else emptyList()
         } else emptyList()
-        val manualFocus = preview.supportsFocus() && preview.supportedFocusValues?.contains(FOCUS_MANUAL) == true &&
-                preview.minimumFocusDistance > 0f
+        val focusValues = (if (preview.supportsFocus()) preview.supportedFocusValues else null) ?: emptyList()
+        val manualFocus = FOCUS_MANUAL in focusValues && preview.minimumFocusDistance > 0f
+        val flashValues = preview.supportedFlashValues ?: emptyList()
+        // for each aspect ratio, the largest resolution the camera offers in the current mode
+        val sizes = preview.getSupportedPictureSizes(true) ?: emptyList()
+        ratioSizes = Ratio.entries.mapNotNull { ratio ->
+            sizes.filter { abs(it.width.toDouble() / it.height - ratio.value) < 0.02 }
+                .maxByOrNull { it.width.toLong() * it.height }
+                ?.let { ratio to it }
+        }.toMap()
         return Capabilities(
             modes = modes,
             details = details,
             hdrs = hdrs,
+            flashes = Flash.ORDER.filter { it in flashValues }.takeIf { it.size > 1 } ?: emptyList(),
+            ratios = ratioSizes.keys.toList().takeIf { it.size > 1 } ?: emptyList(),
+            focusModes = Focus.ORDER.filter { it in focusValues && (it != FOCUS_MANUAL || manualFocus) }.takeIf { it.size > 1 } ?: emptyList(),
             canSwitchCamera = preview.cameraControllerManager.numberOfCameras > 1,
             hasZoom = preview.supportsZoom(),
             zoomMin = if (preview.supportsZoom()) maxOf(1f, preview.minZoomRatio) else 1f,
@@ -205,6 +224,7 @@ class CameraAdapter(private val activity: MainActivity) {
         }
         updatePreviewPosition()
         val (top, bottom) = previewExtent()
+        pollQr(open && !taking && !onTimer && s.mode == Mode.PHOTO && !s.settingsOpen)
         _state.update {
             it.copy(
                 cameraOpen = open,
@@ -218,6 +238,41 @@ class CameraAdapter(private val activity: MainActivity) {
                 previewTop = top,
                 previewBottom = bottom,
             )
+        }
+    }
+
+    // ---- QR codes ------------------------------------------------------------------------
+
+    /** In Photo mode the preview is checked for QR codes about twice a second. The frame is
+     *  read back from the engine's TextureView, so the engine itself isn't involved.
+     */
+    private fun pollQr(allowed: Boolean) {
+        pollCount++
+        val now = SystemClock.uptimeMillis()
+        if (allowed && !qrPinned && pollCount % QR_POLL_EVERY == 0) {
+            val view = preview?.view as? TextureView
+            if (view != null && view.isAvailable) {
+                qrScanner.scan(view) { content ->
+                    handler.post {
+                        if (!qrPinned) {
+                            qrLastSeen = SystemClock.uptimeMillis()
+                            _state.update { it.copy(qr = content) }
+                        }
+                    }
+                }
+            }
+        }
+        if (!qrPinned && _state.value.qr != null && (!allowed || now - qrLastSeen > QR_LINGER_MS)) {
+            _state.update { it.copy(qr = null) }
+        }
+    }
+
+    /** Keeps the current QR result while its sheet is open. */
+    fun setQrPinned(pinned: Boolean) {
+        qrPinned = pinned
+        if (!pinned) {
+            qrLastSeen = 0L
+            _state.update { it.copy(qr = null) }
         }
     }
 
@@ -325,6 +380,34 @@ class CameraAdapter(private val activity: MainActivity) {
         _state.update { it.copy(timer = timer) }
     }
 
+    fun setFlash(value: String) {
+        val preview = preview ?: return
+        if (value !in _state.value.caps.flashes) return
+        ZernoHooks.suppressToastsFor(TOAST_QUIET_MS)
+        preview.updateFlash(value)
+        refreshPro()
+    }
+
+    fun setRatio(ratio: Ratio) {
+        val size = ratioSizes[ratio] ?: return
+        if (ratio == _state.value.ratio || _state.value.takingPhoto) return
+        activity.applicationInterface.setCameraResolutionPref(size.width, size.height)
+        updateEngine()
+    }
+
+    /** Selects a focus mode (an engine value, see [Focus]). Focus peaking is on while focusing
+     *  manually.
+     */
+    fun setFocusMode(value: String) {
+        val preview = preview ?: return
+        if (controller == null || value !in _state.value.caps.focusModes) return
+        ZernoHooks.suppressToastsFor(TOAST_QUIET_MS)
+        val manual = value == FOCUS_MANUAL
+        preview.updateFocus(value, true, !manual)
+        setFocusPeaking(manual)
+        refreshPro()
+    }
+
     private fun applyMode(mode: Mode, detail: Detail, hdr: Hdr, persist: Boolean) {
         val old = _state.value.mode
         val editor = prefs.edit()
@@ -379,23 +462,17 @@ class CameraAdapter(private val activity: MainActivity) {
 
     // ---- "Pro" manual parameters ----------------------------------------------------------
 
-    private fun focusKey(): String =
-        PreferenceKeys.getFocusPreferenceKey(activity.applicationInterface.cameraIdPref, false)
-
-    /** Leaving Pro: remember the manual parameters, and return the engine to fully automatic. */
+    /** Leaving Pro: remember the manual exposure and white balance, and return them to automatic.
+     *  (Exposure compensation and the focus mode are available in every mode, so they stay.)
+     */
     private fun stashProSettings(editor: SharedPreferences.Editor) {
         editor.putString(KEY_PRO_ISO, prefs.getString(PreferenceKeys.ISOPreferenceKey, CameraController.ISO_DEFAULT))
         editor.putLong(KEY_PRO_SHUTTER, prefs.getLong(PreferenceKeys.ExposureTimePreferenceKey, CameraController.EXPOSURE_TIME_DEFAULT))
-        editor.putString(KEY_PRO_EV, prefs.getString(PreferenceKeys.ExposurePreferenceKey, "0"))
         editor.putString(KEY_PRO_WB, prefs.getString(PreferenceKeys.WhiteBalancePreferenceKey, WB_AUTO))
-        editor.putBoolean(KEY_PRO_MF, prefs.getString(focusKey(), "") == FOCUS_MANUAL)
 
         editor.remove(PreferenceKeys.ISOPreferenceKey)
         editor.remove(PreferenceKeys.ExposureTimePreferenceKey)
-        editor.remove(PreferenceKeys.ExposurePreferenceKey)
         editor.remove(PreferenceKeys.WhiteBalancePreferenceKey)
-        editor.putString(focusKey(), FOCUS_CONTINUOUS)
-        editor.putString(PreferenceKeys.FocusPeakingPreferenceKey, PEAKING_OFF)
     }
 
     /** Entering Pro: bring back the manual parameters used last time. */
@@ -405,27 +482,25 @@ class CameraAdapter(private val activity: MainActivity) {
         if (caps.manualExposure && iso != CameraController.ISO_DEFAULT) {
             editor.putString(PreferenceKeys.ISOPreferenceKey, iso)
             editor.putLong(PreferenceKeys.ExposureTimePreferenceKey, prefs.getLong(KEY_PRO_SHUTTER, CameraController.EXPOSURE_TIME_DEFAULT))
-        } else {
-            editor.putString(PreferenceKeys.ExposurePreferenceKey, prefs.getString(KEY_PRO_EV, "0"))
         }
         val wb = prefs.getString(KEY_PRO_WB, WB_AUTO) ?: WB_AUTO
         if (wb == "manual" && caps.wbKelvinValues.isNotEmpty() || wb in caps.wbPresets) {
             editor.putString(PreferenceKeys.WhiteBalancePreferenceKey, wb)
         }
-        if (caps.manualFocus && prefs.getBoolean(KEY_PRO_MF, false)) {
-            editor.putString(focusKey(), FOCUS_MANUAL)
-            editor.putString(PreferenceKeys.FocusPeakingPreferenceKey, PEAKING_ON)
-        }
     }
 
-    /** Re-reads the manual parameters from the engine. */
+    /** Re-reads the manual parameters, and the other settings the engine may adjust, from the engine. */
     private fun refreshPro() {
         val preview = preview ?: return
         val iso = prefs.getString(PreferenceKeys.ISOPreferenceKey, CameraController.ISO_DEFAULT) ?: CameraController.ISO_DEFAULT
         val auto = iso == CameraController.ISO_DEFAULT || !_state.value.caps.manualExposure
         val manualFocus = preview.currentFocusValue == FOCUS_MANUAL
+        val size = if (controller != null) preview.currentPictureSize else null
         _state.update {
             it.copy(
+                flash = preview.currentFlashValue ?: Flash.OFF,
+                focusMode = preview.currentFocusValue ?: Focus.CONTINUOUS,
+                ratio = size?.let { sz -> Ratio.entries.firstOrNull { r -> abs(sz.width.toDouble() / sz.height - r.value) < 0.02 } },
                 pro = it.pro.copy(
                     isoAuto = auto,
                     shutterAuto = auto,
@@ -522,10 +597,7 @@ class CameraAdapter(private val activity: MainActivity) {
         ZernoHooks.suppressToastsFor(TOAST_QUIET_MS)
         val wasManual = preview.currentFocusValue == FOCUS_MANUAL
         if (distance == null) {
-            if (wasManual) {
-                preview.updateFocus(FOCUS_CONTINUOUS, true, true)
-                setFocusPeaking(false)
-            }
+            if (wasManual) setFocusMode(FOCUS_CONTINUOUS)
         } else {
             if (!wasManual) {
                 preview.updateFocus(FOCUS_MANUAL, true, false)
@@ -567,6 +639,8 @@ class CameraAdapter(private val activity: MainActivity) {
         const val TOP_BAR_DP = 56
 
         private const val TOAST_QUIET_MS = 2500L
+        private const val QR_POLL_EVERY = 5 // polls, i.e. about twice a second
+        private const val QR_LINGER_MS = 2500L
 
         private const val KEY_DEFAULTS_DONE = "zerno_defaults_done"
         private const val KEY_MODE = "zerno_mode"
@@ -574,9 +648,7 @@ class CameraAdapter(private val activity: MainActivity) {
         private const val KEY_HDR = "zerno_hdr"
         private const val KEY_PRO_ISO = "zerno_pro_iso"
         private const val KEY_PRO_SHUTTER = "zerno_pro_shutter"
-        private const val KEY_PRO_EV = "zerno_pro_ev"
         private const val KEY_PRO_WB = "zerno_pro_wb"
-        private const val KEY_PRO_MF = "zerno_pro_mf"
 
         private const val GRID_NONE = "preference_grid_none"
         private const val GRID_THIRDS = "preference_grid_3x3"

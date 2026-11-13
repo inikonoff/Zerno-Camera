@@ -19,7 +19,10 @@ import kotlin.math.sin
 /** Zerno's own icons. They're drawn in code (simple line art on a 24 unit grid), so the app
  *  carries no third party icon artwork.
  */
-enum class ZernoIcon { DETAIL, HDR, GRID, LEVEL, TIMER, SETTINGS, SWITCH_CAMERA, GALLERY }
+enum class ZernoIcon {
+    DETAIL, HDR, GRID, LEVEL, TIMER, SETTINGS, SWITCH_CAMERA, GALLERY,
+    FLASH_OFF, FLASH_AUTO, FLASH_ON, TORCH, EXPOSURE, QR, COPY, EYE, CLOSE,
+}
 
 @Composable
 fun ZIcon(icon: ZernoIcon, tint: Color, modifier: Modifier = Modifier) {
@@ -80,6 +83,62 @@ fun ZIcon(icon: ZernoIcon, tint: Color, modifier: Modifier = Modifier) {
                 // two arrows chasing each other round a circle
                 for (turn in 0..1) rotate(180f * turn, p(12f, 12f)) { halfTurnArrow(tint, u, stroke) }
             }
+            ZernoIcon.FLASH_ON, ZernoIcon.FLASH_OFF, ZernoIcon.FLASH_AUTO -> {
+                val dx = if (icon == ZernoIcon.FLASH_AUTO) -3f else 0f
+                val bolt = Path().apply {
+                    moveTo((13.5f + dx) * u, 2.5f * u); lineTo((6.5f + dx) * u, 13.5f * u); lineTo((11.5f + dx) * u, 13.5f * u)
+                    lineTo((10.5f + dx) * u, 21.5f * u); lineTo((17.5f + dx) * u, 10.5f * u); lineTo((12.5f + dx) * u, 10.5f * u)
+                    close()
+                }
+                drawPath(bolt, tint)
+                if (icon == ZernoIcon.FLASH_OFF) line(4f, 4f, 20f, 20f)
+                if (icon == ZernoIcon.FLASH_AUTO) {
+                    // a small "A"
+                    line(16.5f, 21f, 19f, 14f); line(19f, 14f, 21.5f, 21f); line(17.5f, 18.6f, 20.5f, 18.6f)
+                }
+            }
+            ZernoIcon.TORCH -> {
+                // a light bulb
+                drawArc(tint, 150f, 240f, false, p(6f, 3f), Size(12f * u, 12f * u), style = stroke)
+                line(8.2f, 13.2f, 9.5f, 16.5f); line(15.8f, 13.2f, 14.5f, 16.5f)
+                line(9.5f, 16.5f, 14.5f, 16.5f); line(10f, 19f, 14f, 19f); line(11f, 21.5f, 13f, 21.5f)
+            }
+            ZernoIcon.EXPOSURE -> {
+                // a sun: brightness
+                drawCircle(tint, 3.6f * u, p(12f, 12f), style = stroke)
+                for (i in 0 until 8) {
+                    val a = i * PI / 4
+                    val c = cos(a).toFloat(); val sn = sin(a).toFloat()
+                    line(12f + 6.6f * c, 12f + 6.6f * sn, 12f + 8.8f * c, 12f + 8.8f * sn)
+                }
+            }
+            ZernoIcon.QR -> {
+                for ((x, y) in listOf(3.5f to 3.5f, 14f to 3.5f, 3.5f to 14f)) {
+                    drawRoundRect(tint, p(x, y), Size(6.5f * u, 6.5f * u), CornerRadius(1.2f * u), style = stroke)
+                }
+                for ((x, y) in listOf(14.5f to 14.5f, 19.5f to 14.5f, 17f to 17f, 14.5f to 19.5f, 19.5f to 19.5f)) {
+                    drawCircle(tint, 1.1f * u, p(x, y))
+                }
+            }
+            ZernoIcon.COPY -> {
+                drawRoundRect(tint, p(8.5f, 8.5f), Size(11.5f * u, 12f * u), CornerRadius(2.2f * u), style = stroke)
+                val back = Path().apply {
+                    moveTo(15.5f * u, 5.5f * u); lineTo(15.5f * u, 5f * u)
+                    quadraticTo(15.5f * u, 3.5f * u, 14f * u, 3.5f * u); lineTo(5.5f * u, 3.5f * u)
+                    quadraticTo(4f * u, 3.5f * u, 4f * u, 5f * u); lineTo(4f * u, 14f * u)
+                    quadraticTo(4f * u, 15.5f * u, 5.5f * u, 15.5f * u)
+                }
+                drawPath(back, tint, style = stroke)
+            }
+            ZernoIcon.EYE -> {
+                val lid = Path().apply {
+                    moveTo(2.5f * u, 12f * u); quadraticTo(12f * u, 2.5f * u, 21.5f * u, 12f * u)
+                    quadraticTo(12f * u, 21.5f * u, 2.5f * u, 12f * u); close()
+                }
+                drawPath(lid, tint, style = stroke)
+                drawCircle(tint, 2.6f * u, p(12f, 12f))
+            }
+            ZernoIcon.CLOSE -> { line(6f, 6f, 18f, 18f); line(18f, 6f, 6f, 18f) }
             ZernoIcon.GALLERY -> {
                 drawRoundRect(tint, p(3.5f, 5f), Size(17f * u, 14f * u), CornerRadius(2.5f * u), style = stroke)
                 val hills = Path().apply {

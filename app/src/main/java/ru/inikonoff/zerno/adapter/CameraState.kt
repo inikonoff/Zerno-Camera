@@ -13,6 +13,33 @@ enum class Hdr { OFF, DRO, HDR }
 
 enum class Timer(val seconds: Int) { OFF(0), S3(3), S10(10) }
 
+/** Photo aspect ratios; the largest resolution with that ratio is used. */
+enum class Ratio(val label: String, val value: Double) {
+    R4_3("4:3", 4.0 / 3.0), R16_9("16:9", 16.0 / 9.0), R1_1("1:1", 1.0)
+}
+
+/** Engine values for the flash and focus modes that Zerno offers. */
+object Flash {
+    const val OFF = "flash_off"
+    const val AUTO = "flash_auto"
+    const val ON = "flash_on"
+    const val TORCH = "flash_torch"
+    // the front camera lights the scene with the screen instead
+    const val SCREEN_AUTO = "flash_frontscreen_auto"
+    const val SCREEN_ON = "flash_frontscreen_on"
+    const val SCREEN_TORCH = "flash_frontscreen_torch"
+    val ORDER = listOf(OFF, AUTO, SCREEN_AUTO, ON, SCREEN_ON, TORCH, SCREEN_TORCH)
+}
+
+object Focus {
+    const val CONTINUOUS = "focus_mode_continuous_picture"
+    const val AUTO = "focus_mode_auto"
+    const val MACRO = "focus_mode_macro"
+    const val INFINITY = "focus_mode_infinity"
+    const val MANUAL = "focus_mode_manual2"
+    val ORDER = listOf(CONTINUOUS, AUTO, MACRO, INFINITY, MANUAL)
+}
+
 /** What the currently open camera (and the engine on this device) can do. The UI hides whatever
  *  isn't supported.
  */
@@ -20,6 +47,9 @@ data class Capabilities(
     val modes: List<Mode> = listOf(Mode.PHOTO),
     val details: List<Detail> = listOf(Detail.STANDARD),
     val hdrs: List<Hdr> = listOf(Hdr.OFF),
+    val flashes: List<String> = emptyList(), // engine flash values, see [Flash]
+    val ratios: List<Ratio> = emptyList(),
+    val focusModes: List<String> = emptyList(), // engine focus values, see [Focus]
     val canSwitchCamera: Boolean = false,
     val hasZoom: Boolean = false,
     val zoomMin: Float = 1f,
@@ -65,6 +95,11 @@ data class UiState(
     val grid: Boolean = false,
     val level: Boolean = false,
     val timer: Timer = Timer.OFF,
+    val flash: String = Flash.OFF,
+    val ratio: Ratio? = null,
+    val focusMode: String = Focus.CONTINUOUS,
+    /** A QR code currently (or very recently) seen by the camera, if any. */
+    val qr: QrContent? = null,
     val zoom: Float = 1f,
     val caps: Capabilities = Capabilities(),
     val pro: ProState = ProState(),
