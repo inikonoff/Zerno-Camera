@@ -82,9 +82,6 @@ import ru.inikonoff.zerno.ui.ZIcon
 import ru.inikonoff.zerno.ui.ZernoColors
 import ru.inikonoff.zerno.ui.ZernoIcon
 import ru.inikonoff.zerno.ui.tap
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlin.math.abs
 
 private val Panel = Color(0xF21C1C1E)
@@ -104,7 +101,6 @@ fun ViewerScreen(
     repository: MediaRepository,
     canUndo: Boolean,
     brightness: Float,
-    showHint: Boolean,
     onBrightness: (Float) -> Unit,
     onBack: () -> Unit,
     onRemove: (MediaItem) -> Unit,
@@ -164,40 +160,32 @@ fun ViewerScreen(
 
         BrightnessStrip(brightness, onBrightness, Modifier.align(Alignment.CenterStart))
 
-        // top bar
+        // top bar: back, the position "3 / 22" exactly in the middle, and "i" - nothing else
         AnimatedVisibility(chrome, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.TopCenter)) {
-            Row(
+            Box(
                 Modifier
                     .fillMaxWidth()
                     .background(Brush.verticalGradient(listOf(Color(0xB3000000), Color.Transparent)))
                     .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                    .height(48.dp),
             ) {
-                BarButton(ZernoIcon.BACK, stringResource(R.string.zerno_viewer_back), onBack)
-                Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
+                BarButton(ZernoIcon.BACK, stringResource(R.string.zerno_viewer_back), onBack, Modifier.align(Alignment.CenterStart))
+                if (current != null) {
                     BasicText(
-                        if (trashMode) stringResource(R.string.zerno_trash) else stringResource(R.string.zerno_gallery),
+                        "${pagerState.currentPage + 1} / ${items.size}",
+                        modifier = Modifier.align(Alignment.Center),
                         style = White.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
                     )
-                    if (current != null) {
-                        BasicText(
-                            "${pagerState.currentPage + 1} / ${items.size} · " +
-                                    SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(current.dateMs)),
-                            style = Dim,
-                        )
-                    }
-                }
-                if (trashMode && items.isNotEmpty()) {
-                    TextButton(stringResource(R.string.zerno_trash_empty), primary = false) { confirm = Confirm.EmptyTrash }
-                }
-                if (current != null) {
-                    BarButton(ZernoIcon.INFO, stringResource(R.string.zerno_viewer_info), tint = if (info) ZernoColors.Accent else Color.White) { info = !info }
+                    BarButton(
+                        ZernoIcon.INFO, stringResource(R.string.zerno_viewer_info), if (info) ZernoColors.Accent else Color.White,
+                        Modifier.align(Alignment.CenterEnd),
+                    ) { info = !info }
                 }
             }
         }
 
-        // bottom: info panel, trash actions, undo, hint
+        // bottom: info panel, trash actions, undo
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing).padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -212,12 +200,6 @@ fun ViewerScreen(
                     Spacer(Modifier.width(10.dp))
                     TextButton(stringResource(R.string.zerno_viewer_undo), primary = true, onClick = onUndo)
                 }
-            } else if (showHint && chrome && !info && items.isNotEmpty()) {
-                BasicText(
-                    stringResource(if (hasTrash) R.string.zerno_viewer_hint else R.string.zerno_viewer_hint_delete),
-                    modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(0x99000000)).padding(horizontal = 14.dp, vertical = 8.dp),
-                    style = Dim,
-                )
             }
             if (info && current != null) {
                 InfoPanel(current, repository)
@@ -226,6 +208,7 @@ fun ViewerScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     TextButton(stringResource(R.string.zerno_trash_restore), primary = true) { onRestore(current) }
                     TextButton(stringResource(R.string.zerno_trash_delete), primary = false) { confirm = Confirm.Delete(current) }
+                    TextButton(stringResource(R.string.zerno_trash_empty), primary = false) { confirm = Confirm.EmptyTrash }
                 }
             }
         }
@@ -477,12 +460,13 @@ private fun InfoPanel(item: MediaItem, repository: MediaRepository) {
 }
 
 @Composable
-private fun BarButton(icon: ZernoIcon, description: String, onClick: () -> Unit) = BarButton(icon, description, Color.White, onClick)
+private fun BarButton(icon: ZernoIcon, description: String, onClick: () -> Unit, modifier: Modifier = Modifier) =
+    BarButton(icon, description, Color.White, modifier, onClick)
 
 @Composable
-private fun BarButton(icon: ZernoIcon, description: String, tint: Color, onClick: () -> Unit) {
+private fun BarButton(icon: ZernoIcon, description: String, tint: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
-        Modifier.size(48.dp).semantics { contentDescription = description }.tap(onClick = onClick),
+        modifier.size(48.dp).semantics { contentDescription = description }.tap(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         ZIcon(icon, tint, Modifier.size(24.dp))

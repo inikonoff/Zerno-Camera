@@ -117,6 +117,7 @@ object Diagnostics {
         appendLine("noise reduction modes: ${c.get(CameraCharacteristics.NOISE_REDUCTION_AVAILABLE_NOISE_REDUCTION_MODES)?.joinToString(",")}")
         appendLine("edge modes: ${c.get(CameraCharacteristics.EDGE_AVAILABLE_EDGE_MODES)?.joinToString(",")}")
         appendLine("tonemap modes: ${c.get(CameraCharacteristics.TONEMAP_AVAILABLE_TONE_MAP_MODES)?.joinToString(",")}, max curve points: ${c.get(CameraCharacteristics.TONEMAP_MAX_CURVE_POINTS)}")
+        appendLine("exposure compensation: step ${c.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP)} EV, range ${c.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE)}")
         appendLine("metering regions: AE ${c.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE)}, AF ${c.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AF)}")
         appendLine("ISO range: ${c.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)}, exposure range (ns): ${c.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)}")
         appendLine("focal lengths: ${c.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)?.joinToString(",")}, apertures: ${c.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)?.joinToString(",")}")

@@ -3,6 +3,7 @@ package ru.inikonoff.zerno.viewer
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -45,6 +46,9 @@ class ViewerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // The photo turns with the phone, whatever the phone's own auto-rotate setting says
+        // (the same way the camera app screen does), including upside down.
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
         val folder = intent.getStringExtra(EXTRA_FOLDER)
         if (folder == null) {
             finish()
@@ -65,7 +69,6 @@ class ViewerActivity : ComponentActivity() {
                 repository = repository,
                 canUndo = undoable.isNotEmpty(),
                 brightness = brightness,
-                showHint = !trashMode && showSwipeHint(),
                 onBrightness = ::applyBrightness,
                 onBack = ::finish,
                 onRemove = ::remove,
@@ -164,20 +167,10 @@ class ViewerActivity : ComponentActivity() {
         permissionLauncher.launch(permission)
     }
 
-    /** The "swipe up or down to delete" hint is shown the first few times. */
-    private fun showSwipeHint(): Boolean {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val shown = prefs.getInt(KEY_HINT_SHOWN, 0)
-        if (shown >= 3) return false
-        prefs.edit().putInt(KEY_HINT_SHOWN, shown + 1).apply()
-        return true
-    }
-
     companion object {
         private const val EXTRA_FOLDER = "folder"
         private const val EXTRA_TRASH = "trash"
         private const val KEY_ASKED_PERMISSION = "zerno_viewer_asked_permission"
-        private const val KEY_HINT_SHOWN = "zerno_viewer_hint_shown"
 
         /** @param folder the absolute path of the folder the camera saves to. */
         fun start(context: Context, folder: String, trash: Boolean) {
