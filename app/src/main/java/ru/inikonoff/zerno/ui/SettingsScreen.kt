@@ -142,6 +142,12 @@ fun SettingsScreen(state: UiState, adapter: CameraAdapter) {
                 Adjustment(stringResource(R.string.zerno_saturation), settings.saturation) {
                     adapter.setImageAdjustment(settings.brightness, settings.contrast, it)
                 }
+                if (state.caps.toneCurve) {
+                    LinkRow(stringResource(R.string.zerno_tone_calibrate), stringResource(R.string.zerno_tone_calibrate_hint)) {
+                        adapter.recalibrateTone()
+                        adapter.showSettings(false)
+                    }
+                }
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     BasicText(stringResource(R.string.zerno_image_hint), modifier = Modifier.weight(1f), style = Hint)
                     if (settings.brightness != 0 || settings.contrast != 0 || settings.saturation != 0 || settings.shadows != 0 || settings.highlights != 0) {

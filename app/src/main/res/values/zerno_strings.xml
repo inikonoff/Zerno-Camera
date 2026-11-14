@@ -120,4 +120,6 @@
     <string name="zerno_diagnostics_text">How long the last start-up and the last photo took, and what this phone\'s cameras report. Nothing is sent anywhere.</string>
     <string name="zerno_shadows">Shadows</string>
     <string name="zerno_highlights">Highlights</string>
+    <string name="zerno_tone_calibrate">Recalibrate shadows and highlights</string>
+    <string name="zerno_tone_calibrate_hint">If the picture gets darker or lighter when they are used. Point the camera at an ordinary, evenly lit scene and hold still for a second.</string>
 </resources>

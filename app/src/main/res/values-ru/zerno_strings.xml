@@ -119,4 +119,6 @@
     <string name="zerno_diagnostics_text">Сколько заняли последний запуск и последний снимок и что сообщают камеры этого телефона. Отчёт никуда не отправляется.</string>
     <string name="zerno_shadows">Тени</string>
     <string name="zerno_highlights">Света</string>
+    <string name="zerno_tone_calibrate">Откалибровать тени и света заново</string>
+    <string name="zerno_tone_calibrate_hint">Если при их использовании кадр темнеет или светлеет. Наведите камеру на обычную, ровно освещённую сцену и секунду держите неподвижно.</string>
 </resources>

@@ -321,7 +321,7 @@ class CameraAdapter(private val activity: MainActivity) {
             imageReceived = ZernoHooks.getMark(ZernoHooks.MARK_IMAGE_RECEIVED).takeIf { it >= timings.press } ?: 0L,
             captureCompleted = ZernoHooks.getMark(ZernoHooks.MARK_CAPTURE_COMPLETED).takeIf { it >= timings.press } ?: 0L,
         )
-        _state.update { it.copy(diagnostics = Diagnostics.report(activity, t)) }
+        _state.update { it.copy(diagnostics = Diagnostics.report(activity, t, toneCurveInfo())) }
     }
 
     // ---- QR codes ------------------------------------------------------------------------
@@ -536,8 +536,14 @@ class CameraAdapter(private val activity: MainActivity) {
     // ---- shadows and highlights (tone curve) --------------------------------------------
 
     private var toneCurveMaxPoints = 0
-    /** Waiting to learn the camera's own tone curve before applying ours: give up at this time. */
-    private var toneCurveDeadline = 0L
+    /** The current camera's correction table (see [ToneCurve.match]), once calibrated. */
+    private var toneCorrection: FloatArray? = null
+    // calibration: 0 = idle, 1 = waiting to measure the camera's own rendering,
+    // 2 = waiting to measure the rendering through the known curve
+    private var calibrationStep = 0
+    private var calibrationAt = 0L
+    private var calibrationGiveUpAt = 0L
+    private var cameraHistogram: IntArray? = null
 
     /** How many tone curve points the current camera accepts (0 if it takes no custom curve). */
     private fun toneCurvePoints(preview: Preview): Int {
@@ -554,50 +560,124 @@ class CameraAdapter(private val activity: MainActivity) {
         return toneCurveMaxPoints
     }
 
-    /** Called when a camera has been set up. The curve is built on top of the camera's own
-     *  curve, which is only reported while the camera is using it - so tone mapping is first
-     *  left to the camera for a moment, and our curve is applied once its curve is known.
-     */
+    /** Called when a camera has been set up. */
     private fun startToneCurve() {
         val cameraId = preview?.cameraId ?: return
-        ZernoHooks.default_tone_curve = cameraCurves[cameraId]
-        if (cameraCurves[cameraId] != null || toneCurveMaxPoints < 16) {
-            applyToneCurve()
-        } else {
-            ZernoHooks.tone_curve = null
-            ZernoHooks.want_default_tone_curve = true
-            toneCurveDeadline = SystemClock.uptimeMillis() + TONE_CURVE_WAIT_MS
-        }
+        calibrationStep = 0
+        toneCorrection = ToneCurve.decode(prefs.getString(KEY_TONE_CORRECTION + cameraId, null))
+        applyToneCurve()
     }
 
-    private fun pollToneCurve() {
-        if (toneCurveDeadline == 0L) return
-        val found = ZernoHooks.default_tone_curve
-        if (found != null || SystemClock.uptimeMillis() > toneCurveDeadline) {
-            toneCurveDeadline = 0L
-            ZernoHooks.want_default_tone_curve = false
-            val cameraId = preview?.cameraId
-            if (found != null && cameraId != null) cameraCurves[cameraId] = found
-            applyToneCurve()
-        }
-    }
-
-    private fun applyToneCurve() {
-        val settings = _state.value.settings
-        val curve = if (toneCurveMaxPoints >= 16) {
-            ToneCurve.build(settings.shadows, settings.highlights, ZernoHooks.default_tone_curve, toneCurveMaxPoints)
-        } else null
+    private fun setEngineToneCurve(curve: Array<FloatArray>?) {
         val changed = curve != null || ZernoHooks.tone_curve != null
         ZernoHooks.tone_curve = curve
         if (changed) (controller as? CameraController2)?.zernoApplyToneCurve()
     }
+
+    private fun applyToneCurve() {
+        val settings = _state.value.settings
+        if (toneCurveMaxPoints < 16 || (settings.shadows == 0 && settings.highlights == 0)) {
+            // nothing to do: tone mapping is left entirely to the camera
+            calibrationStep = 0
+            setEngineToneCurve(null)
+            return
+        }
+        if (toneCorrection == null) {
+            startCalibration()
+            return
+        }
+        setEngineToneCurve(ToneCurve.build(settings.shadows, settings.highlights, toneCorrection, toneCurveMaxPoints))
+    }
+
+    /** Measures how this camera renders tones (see [ToneCurve]). Takes about a second, during
+     *  which the preview may flicker slightly; best done with the camera held still.
+     */
+    private fun startCalibration() {
+        if (calibrationStep != 0) return
+        setEngineToneCurve(null)
+        val now = SystemClock.uptimeMillis()
+        calibrationStep = 1
+        calibrationAt = now + CALIBRATION_SETTLE_MS
+        calibrationGiveUpAt = now + CALIBRATION_TIMEOUT_MS
+    }
+
+    fun recalibrateTone() {
+        val cameraId = preview?.cameraId ?: return
+        if (toneCurveMaxPoints < 16) return
+        prefs.edit().remove(KEY_TONE_CORRECTION + cameraId).apply()
+        toneCorrection = null
+        calibrationStep = 0
+        startCalibration()
+    }
+
+    private fun pollToneCurve() {
+        if (calibrationStep == 0) return
+        val now = SystemClock.uptimeMillis()
+        if (now < calibrationAt) return
+        val preview = preview
+        val ready = preview != null && controller != null && preview.isPreviewStarted && !preview.isTakingPhotoOrOnTimer
+        val histogram = if (ready) previewHistogram() else null
+        if (histogram == null) {
+            if (now > calibrationGiveUpAt) finishCalibration(null) else calibrationAt = now + 300
+            return
+        }
+        if (calibrationStep == 1) {
+            cameraHistogram = histogram
+            setEngineToneCurve(ToneCurve.probe(toneCurveMaxPoints))
+            calibrationStep = 2
+            calibrationAt = now + CALIBRATION_SETTLE_MS
+        } else {
+            finishCalibration(cameraHistogram?.let { ToneCurve.match(it, histogram) })
+        }
+    }
+
+    private fun finishCalibration(correction: FloatArray?) {
+        calibrationStep = 0
+        cameraHistogram = null
+        val cameraId = preview?.cameraId
+        if (correction != null && cameraId != null) {
+            prefs.edit().putString(KEY_TONE_CORRECTION + cameraId, ToneCurve.encode(correction)).apply()
+            toneCorrection = correction
+        } else {
+            // couldn't measure (e.g. a featureless scene): use plain sRGB for now, and measure
+            // again the next time the camera is opened
+            toneCorrection = FloatArray(ToneCurve.CORRECTION_SIZE) { it / (ToneCurve.CORRECTION_SIZE - 1f) }
+        }
+        applyToneCurve()
+    }
+
+    /** The brightness histogram (256 bins) of the current preview frame. */
+    private fun previewHistogram(): IntArray? {
+        val view = preview?.view as? TextureView ?: return null
+        if (!view.isAvailable || view.width == 0 || view.height == 0) return null
+        return try {
+            val width = 120
+            val height = (width * view.height / view.width).coerceIn(60, 360)
+            val bitmap = view.getBitmap(width, height) ?: return null
+            val pixels = IntArray(width * height)
+            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+            bitmap.recycle()
+            val histogram = IntArray(256)
+            for (c in pixels) {
+                val luma = (77 * ((c shr 16) and 0xff) + 150 * ((c shr 8) and 0xff) + 29 * (c and 0xff)) shr 8
+                histogram[luma.coerceIn(0, 255)]++
+            }
+            histogram
+        } catch (e: RuntimeException) {
+            null
+        }
+    }
+
+    private fun toneCurveInfo(): String =
+        "calibration: ${ToneCurve.describe(toneCorrection)}${if (calibrationStep != 0) " (calibrating now)" else ""}\n" +
+                "curve in use: ${ToneCurve.describeCurve(ZernoHooks.tone_curve)}"
 
     fun setTone(shadows: Int, highlights: Int) {
         val range = -Settings.ADJUST_RANGE..Settings.ADJUST_RANGE
         val settings = _state.value.settings.copy(shadows = shadows.coerceIn(range), highlights = highlights.coerceIn(range))
         prefs.edit().putInt(KEY_SHADOWS, settings.shadows).putInt(KEY_HIGHLIGHTS, settings.highlights).apply()
         _state.update { it.copy(settings = settings) }
-        if (toneCurveDeadline == 0L) applyToneCurve() // otherwise it's applied once the camera's curve is known
+        if (calibrationStep == 0) applyToneCurve() // otherwise it's applied once calibration is done
     }
 
     fun setQrEnabled(on: Boolean) {
@@ -994,10 +1074,9 @@ class CameraAdapter(private val activity: MainActivity) {
         private const val KEY_SHADOWS = "zerno_shadows"
         private const val KEY_HIGHLIGHTS = "zerno_highlights"
         private const val KEY_BRIGHTNESS = "zerno_brightness"
-        private const val TONE_CURVE_WAIT_MS = 1500L
-
-        /** The cameras' own tone curves, by camera id, once learnt (they don't change). */
-        private val cameraCurves = HashMap<Int, Array<FloatArray>>()
+        private const val KEY_TONE_CORRECTION = "zerno_tone_correction_"
+        private const val CALIBRATION_SETTLE_MS = 700L
+        private const val CALIBRATION_TIMEOUT_MS = 8000L
         private const val KEY_CONTRAST = "zerno_contrast"
         private const val KEY_SATURATION = "zerno_saturation"
         private const val KEY_QR = "zerno_qr"

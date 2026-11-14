@@ -33,7 +33,7 @@ data class Timings(
  *  this phone tell apps they can do. It is only ever shown to the user (who may copy it).
  */
 object Diagnostics {
-    fun report(context: Context, timings: Timings): String = buildString {
+    fun report(context: Context, timings: Timings, toneInfo: String): String = buildString {
         appendLine("Zerno ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
         appendLine("${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
         appendLine()
@@ -62,8 +62,7 @@ object Diagnostics {
         }
         appendLine()
         appendLine("== TONE CURVE ==")
-        appendLine("camera's own curve: ${ToneCurve.describe(net.sourceforge.opencamera.ZernoHooks.default_tone_curve)}")
-        appendLine("Zerno curve in use: ${net.sourceforge.opencamera.ZernoHooks.tone_curve?.let { ToneCurve.describe(it) } ?: "none"}")
+        appendLine(toneInfo)
         appendLine()
         appendLine("== CAMERAS ==")
         try {
