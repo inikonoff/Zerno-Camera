@@ -164,4 +164,8 @@
     <string name="zerno_volume_exposure">Exposure</string>
     <string name="zerno_volume_volume">Volume</string>
     <string name="zerno_volume_other">Other</string>
+    <string name="zerno_assist">Preview aids</string>
+    <string name="zerno_assist_peaking">Highlight sharp edges in manual focus</string>
+    <string name="zerno_assist_zebra">Zebra stripes on overexposed areas</string>
+    <string name="zerno_assist_hint">Both analyse the preview continuously and can make it less smooth on slower phones.</string>
 </resources>

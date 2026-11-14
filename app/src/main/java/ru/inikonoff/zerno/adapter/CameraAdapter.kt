@@ -12,6 +12,7 @@ import android.preference.PreferenceManager
 import android.os.Build
 import android.os.Process
 import android.os.SystemClock
+import android.view.Choreographer
 import android.view.OrientationEventListener
 import android.view.TextureView
 import android.view.View
@@ -84,6 +85,13 @@ class CameraAdapter(private val activity: MainActivity) {
     fun setActive(active: Boolean) {
         if (active && orientationListener.canDetectOrientation()) orientationListener.enable()
         else orientationListener.disable()
+        if (active && !countingFrames) {
+            countingFrames = true
+            windowStart = 0L
+            Choreographer.getInstance().postFrameCallback(frameCallback)
+        } else if (!active) {
+            countingFrames = false
+        }
     }
 
     // ---- start up -------------------------------------------------------------------------
@@ -125,11 +133,13 @@ class CameraAdapter(private val activity: MainActivity) {
             contrast = prefs.getInt(KEY_CONTRAST, 0),
             saturation = prefs.getInt(KEY_SATURATION, 0),
             chromaDenoise = prefs.getInt(KEY_CHROMA, 0).coerceIn(0, Settings.CHROMA_MAX),
+            focusPeaking = prefs.getBoolean(KEY_PEAKING, true),
             qrEnabled = prefs.getBoolean(KEY_QR, true),
             shutterSound = prefs.getBoolean(PreferenceKeys.ShutterSoundPreferenceKey, true),
             jpegQuality = prefs.getString(PreferenceKeys.QualityPreferenceKey, "90")?.toIntOrNull() ?: 90,
             mirrorFront = prefs.getString(PreferenceKeys.FrontCameraMirrorKey, MIRROR_NO) == MIRROR_PHOTO,
             geotag = prefs.getBoolean(PreferenceKeys.LocationPreferenceKey, false),
+            zebra = prefs.getString(PreferenceKeys.ZebraStripesPreferenceKey, "0") != "0",
             volumeKeys = prefs.getString(PreferenceKeys.VolumeKeysPreferenceKey, "volume_take_photo") ?: "volume_take_photo",
         )
         applyMetering(settings.metering)
@@ -317,7 +327,7 @@ class CameraAdapter(private val activity: MainActivity) {
             imageReceived = ZernoHooks.getMark(ZernoHooks.MARK_IMAGE_RECEIVED).takeIf { it >= timings.press } ?: 0L,
             captureCompleted = ZernoHooks.getMark(ZernoHooks.MARK_CAPTURE_COMPLETED).takeIf { it >= timings.press } ?: 0L,
         )
-        _state.update { it.copy(diagnostics = Diagnostics.report(activity, t)) }
+        _state.update { it.copy(diagnostics = Diagnostics.report(activity, t, smoothness.toList())) }
     }
 
     // ---- QR codes ------------------------------------------------------------------------
@@ -489,6 +499,7 @@ class CameraAdapter(private val activity: MainActivity) {
             jpegQuality = prefs.getString(PreferenceKeys.QualityPreferenceKey, "90")?.toIntOrNull() ?: 90,
             mirrorFront = prefs.getString(PreferenceKeys.FrontCameraMirrorKey, MIRROR_NO) == MIRROR_PHOTO,
             geotag = prefs.getBoolean(PreferenceKeys.LocationPreferenceKey, false),
+            zebra = prefs.getString(PreferenceKeys.ZebraStripesPreferenceKey, "0") != "0",
             volumeKeys = prefs.getString(PreferenceKeys.VolumeKeysPreferenceKey, "volume_take_photo") ?: "volume_take_photo",
         )
         it.copy(settingsOpen = visible, settings = settings)
@@ -590,6 +601,62 @@ class CameraAdapter(private val activity: MainActivity) {
     fun setVolumeKeys(action: String) {
         prefs.edit().putString(PreferenceKeys.VolumeKeysPreferenceKey, action).apply()
         _state.update { it.copy(settings = it.settings.copy(volumeKeys = action)) }
+    }
+
+    fun setFocusPeakingEnabled(on: Boolean) {
+        prefs.edit().putBoolean(KEY_PEAKING, on).apply()
+        _state.update { it.copy(settings = it.settings.copy(focusPeaking = on)) }
+        setFocusPeaking(_state.value.focusMode == Focus.MANUAL)
+    }
+
+    /** Zebra stripes are an engine feature; "on" uses the threshold chosen in the Open Camera
+     *  settings, or about 97% brightness if none was.
+     */
+    fun setZebra(on: Boolean) {
+        val current = prefs.getString(PreferenceKeys.ZebraStripesPreferenceKey, "0") ?: "0"
+        val value = if (!on) "0" else if (current != "0") current else ZEBRA_DEFAULT
+        prefs.edit().putString(PreferenceKeys.ZebraStripesPreferenceKey, value).apply()
+        activity.applicationInterface.drawPreview.updateSettings()
+        _state.update { it.copy(settings = it.settings.copy(zebra = on)) }
+    }
+
+    // ---- smoothness (for the diagnostics report) ------------------------------------------
+
+    /** How many frames the UI drew in each of the last few seconds on the camera screen, and
+     *  the longest gap between two frames in that second.
+     */
+    private val smoothness = ArrayDeque<String>()
+    private var windowStart = 0L
+    private var windowFrames = 0
+    private var windowLongestGap = 0L
+    private var lastFrame = 0L
+    private var countingFrames = false
+    private val frameCallback = object : Choreographer.FrameCallback {
+        override fun doFrame(frameTimeNanos: Long) {
+            if (!countingFrames) return
+            val now = frameTimeNanos / 1_000_000
+            val s = _state.value
+            // only the camera screen itself is of interest
+            if (s.zernoSettingsOpen || s.settingsOpen || s.diagnostics != null) {
+                windowStart = 0L
+            } else {
+                if (windowStart == 0L) {
+                    windowStart = now; windowFrames = 0; windowLongestGap = 0L
+                } else {
+                    windowFrames++
+                    windowLongestGap = maxOf(windowLongestGap, now - lastFrame)
+                    if (now - windowStart >= 1000) {
+                        smoothness.addLast("$windowFrames frames, longest gap $windowLongestGap ms (mode ${s.mode}, focus ${s.focusMode.removePrefix("focus_mode_")}, " +
+                                "peaking ${s.settings.focusPeaking && s.focusMode == Focus.MANUAL}, zebra ${s.settings.zebra}, " +
+                                "shutter ${if (s.pro.shutterAuto) "auto" else Scales.formatShutter(s.pro.shutterNs)})")
+                        while (smoothness.size > 4) smoothness.removeFirst()
+                        windowStart = now; windowFrames = 0; windowLongestGap = 0L
+                    }
+                }
+                lastFrame = now
+            }
+            Choreographer.getInstance().postFrameCallback(this)
+        }
     }
 
     fun setJpegQuality(quality: Int) {
@@ -931,7 +998,11 @@ class CameraAdapter(private val activity: MainActivity) {
         refreshPro()
     }
 
-    private fun setFocusPeaking(on: Boolean) {
+    /** [manual]: whether manual focus is in use; the highlighting is only shown then, and only
+     *  if it's switched on in the settings (it costs some preview smoothness).
+     */
+    private fun setFocusPeaking(manual: Boolean) {
+        val on = manual && _state.value.settings.focusPeaking
         prefs.edit().putString(PreferenceKeys.FocusPeakingPreferenceKey, if (on) PEAKING_ON else PEAKING_OFF).apply()
         activity.applicationInterface.drawPreview.updateSettings()
     }
@@ -977,6 +1048,8 @@ class CameraAdapter(private val activity: MainActivity) {
         private const val KEY_CONTRAST = "zerno_contrast"
         private const val KEY_SATURATION = "zerno_saturation"
         private const val KEY_QR = "zerno_qr"
+        private const val KEY_PEAKING = "zerno_focus_peaking"
+        private const val ZEBRA_DEFAULT = "247"
         private const val KEY_CHROMA = "zerno_chroma_denoise"
         private const val MIRROR_NO = "preference_front_camera_mirror_no"
         private const val MIRROR_PHOTO = "preference_front_camera_mirror_photo"

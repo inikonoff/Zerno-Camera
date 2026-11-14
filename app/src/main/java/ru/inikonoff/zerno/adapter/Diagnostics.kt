@@ -33,7 +33,7 @@ data class Timings(
  *  this phone tell apps they can do. It is only ever shown to the user (who may copy it).
  */
 object Diagnostics {
-    fun report(context: Context, timings: Timings): String = buildString {
+    fun report(context: Context, timings: Timings, smoothness: List<String>): String = buildString {
         appendLine("Zerno ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
         appendLine("${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
         appendLine()
@@ -60,6 +60,9 @@ object Diagnostics {
                 line("shutter pressed -> saved", press, saved)
             }
         }
+        appendLine()
+        appendLine("== SMOOTHNESS (camera screen, last seconds before this report) ==")
+        if (smoothness.isEmpty()) appendLine("(not measured yet)") else smoothness.forEach { appendLine(it) }
         appendLine()
         appendLine("== CAMERAS ==")
         try {

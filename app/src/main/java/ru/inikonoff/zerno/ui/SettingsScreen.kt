@@ -163,6 +163,12 @@ fun SettingsScreen(state: UiState, adapter: CameraAdapter) {
                 }
             }
 
+            Section(stringResource(R.string.zerno_assist)) {
+                ToggleRow(stringResource(R.string.zerno_assist_peaking), settings.focusPeaking, adapter::setFocusPeakingEnabled)
+                ToggleRow(stringResource(R.string.zerno_assist_zebra), settings.zebra, adapter::setZebra)
+                BasicText(stringResource(R.string.zerno_assist_hint), modifier = Modifier.padding(top = 4.dp), style = Hint)
+            }
+
             Section(stringResource(R.string.zerno_volume_keys)) {
                 Segmented(
                     // an action set in the Open Camera settings that isn't one of ours is shown too

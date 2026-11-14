@@ -163,4 +163,8 @@
     <string name="zerno_volume_exposure">Экспозиция</string>
     <string name="zerno_volume_volume">Громкость</string>
     <string name="zerno_volume_other">Другое</string>
+    <string name="zerno_assist">Помощники на превью</string>
+    <string name="zerno_assist_peaking">Подсветка резких контуров при ручном фокусе</string>
+    <string name="zerno_assist_zebra">Зебра на пересвеченных участках</string>
+    <string name="zerno_assist_hint">Оба постоянно анализируют превью и на небыстрых телефонах могут сделать его менее плавным.</string>
 </resources>

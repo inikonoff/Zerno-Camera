@@ -34,6 +34,10 @@ data class Settings(
     val jpegQuality: Int = 90,
     val mirrorFront: Boolean = false,
     val geotag: Boolean = false,
+    /** Highlight in-focus edges while focusing manually. */
+    val focusPeaking: Boolean = true,
+    /** Stripes over (nearly) blown-out areas of the preview. */
+    val zebra: Boolean = false,
     /** What the volume keys do (an engine value, see [VOLUME_KEY_ACTIONS]). */
     val volumeKeys: String = "volume_take_photo",
 ) {
