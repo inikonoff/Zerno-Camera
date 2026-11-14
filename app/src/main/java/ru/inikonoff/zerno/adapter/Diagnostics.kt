@@ -14,11 +14,14 @@ import net.sourceforge.opencamera.BuildConfig
 data class Timings(
     val processStart: Long = 0,
     val create: Long = 0,
+    val firstResume: Long = 0,
     val resume: Long = 0,
     val cameraOpen: Long = 0,
     val previewStarted: Long = 0,
+    val firstFrame: Long = 0,
     val shotLabel: String = "",
     val press: Long = 0,
+    val captureRequested: Long = 0,
     val captureStarted: Long = 0,
     val imageReceived: Long = 0,
     val captureCompleted: Long = 0,
@@ -38,15 +41,19 @@ object Diagnostics {
         with(timings) {
             // only a cold start has a meaningful process start time
             if (processStart in 1..create && create - processStart < 10_000) line("process start -> app created", processStart, create)
-            line("app created -> resumed", create, resume)
-            line("resumed -> camera open", resume, cameraOpen)
+            line("app created -> first shown", create, firstResume)
+            // if the app has been left and returned to, the lines below are for the latest return
+            appendLine(if (resume > firstResume) "(latest return to the app:)" else "(first start:)")
+            line("shown -> camera open", resume, cameraOpen)
             line("camera open -> preview running", cameraOpen, previewStarted)
-            line("TOTAL app created -> preview running", create, previewStarted)
+            line("preview running -> first frame visible", previewStarted, firstFrame)
+            line("TOTAL shown -> first frame visible", resume, firstFrame)
             appendLine()
             appendLine("== LAST PHOTO ==")
             if (press == 0L) appendLine("(no photo taken yet)") else {
                 appendLine(shotLabel)
-                line("shutter pressed -> exposure started", press, captureStarted)
+                line("shutter pressed -> photo requested (focusing)", press, captureRequested)
+                line("photo requested -> exposure started (camera)", captureRequested, captureStarted)
                 line("exposure started -> image received", captureStarted, imageReceived)
                 line("image received -> capture completed", imageReceived, captureCompleted)
                 line("shutter pressed -> ready for next photo", press, ready)

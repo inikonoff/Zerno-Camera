@@ -99,21 +99,20 @@ public final class ZernoHooks {
             }
             final int width = bitmap.getWidth(), height = bitmap.getHeight();
             if( chroma_level > 0 ) {
-                ZernoChromaDenoise denoise = new ZernoChromaDenoise(width, height, chroma_level);
-                final int band_height = 4*ZernoChromaDenoise.BAND_MULTIPLE;
-                int [] pixels = new int[width*band_height];
-                for(int y=0;y<height;y+=band_height) {
-                    int h = Math.min(band_height, height - y);
-                    bitmap.getPixels(pixels, 0, width, 0, y, width, h);
-                    denoise.accumulate(pixels, y, h);
-                }
+                final ZernoChromaDenoise denoise = new ZernoChromaDenoise(width, height, chroma_level);
+                runInBands(bitmap, denoise.bandHeight(), false, new BandTask() {
+                    @Override
+                    public void run(int [] pixels, int y, int rows) {
+                        denoise.accumulate(pixels, y, rows);
+                    }
+                });
                 denoise.finish();
-                for(int y=0;y<height;y+=band_height) {
-                    int h = Math.min(band_height, height - y);
-                    bitmap.getPixels(pixels, 0, width, 0, y, width, h);
-                    denoise.apply(pixels, y, h);
-                    bitmap.setPixels(pixels, 0, width, 0, y, width, h);
-                }
+                runInBands(bitmap, denoise.bandHeight(), true, new BandTask() {
+                    @Override
+                    public void run(int [] pixels, int y, int rows) {
+                        denoise.apply(pixels, y, rows);
+                    }
+                });
             }
             if( matrix != null ) {
                 android.graphics.Paint paint = new android.graphics.Paint();
@@ -136,6 +135,56 @@ public final class ZernoHooks {
         return bitmap;
     }
 
+    private interface BandTask {
+        void run(int [] pixels, int y, int rows);
+    }
+
+    /** Runs a task over the bitmap in horizontal bands, on several threads (each band is only
+     *  ever touched by one thread).
+     * @param write_back Whether the task modifies the pixels, which must then be stored.
+     */
+    private static void runInBands(final Bitmap bitmap, final int band_height, final boolean write_back, final BandTask task) {
+        final int width = bitmap.getWidth(), height = bitmap.getHeight();
+        final int n_bands = (height + band_height - 1) / band_height;
+        final int n_threads = Math.max(1, Math.min(4, Math.min(Runtime.getRuntime().availableProcessors(), n_bands)));
+        final java.util.concurrent.atomic.AtomicInteger next_band = new java.util.concurrent.atomic.AtomicInteger(0);
+        final Throwable [] failure = new Throwable[1];
+        Thread [] threads = new Thread[n_threads];
+        for(int i=0;i<n_threads;i++) {
+            threads[i] = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        int [] pixels = new int[width*band_height];
+                        int band;
+                        while( (band = next_band.getAndIncrement()) < n_bands ) {
+                            int y = band*band_height;
+                            int rows = Math.min(band_height, height - y);
+                            bitmap.getPixels(pixels, 0, width, 0, y, width, rows);
+                            task.run(pixels, y, rows);
+                            if( write_back )
+                                bitmap.setPixels(pixels, 0, width, 0, y, width, rows);
+                        }
+                    }
+                    catch(Throwable t) {
+                        failure[0] = t;
+                    }
+                }
+            }, "ZernoImage" + i);
+            threads[i].start();
+        }
+        for(Thread thread : threads) {
+            try {
+                thread.join();
+            }
+            catch(InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        if( failure[0] != null )
+            throw new RuntimeException("image processing failed", failure[0]);
+    }
+
     // ---- timing ----
 
     public static final int MARK_CREATE = 0; // MainActivity.onCreate()
@@ -143,13 +192,20 @@ public final class ZernoHooks {
     public static final int MARK_CAPTURE_STARTED = 2; // the camera has started exposing
     public static final int MARK_IMAGE_RECEIVED = 3; // the camera has delivered the image(s)
     public static final int MARK_CAPTURE_COMPLETED = 4; // the engine considers the photo taken
-    private static final long [] marks = new long[5];
+    public static final int MARK_FIRST_RESUME = 5; // the first onResume() after onCreate()
+    public static final int MARK_CAPTURE_REQUESTED = 6; // focusing is done, the camera is asked for the photo
+    private static final long [] marks = new long[7];
 
     /** Records when something happened (SystemClock.uptimeMillis()), for the diagnostics
      *  report. May be called from any thread.
      */
     public static void mark(int what) {
-        marks[what] = android.os.SystemClock.uptimeMillis();
+        final long now = android.os.SystemClock.uptimeMillis();
+        marks[what] = now;
+        if( what == MARK_CREATE )
+            marks[MARK_FIRST_RESUME] = 0;
+        else if( what == MARK_RESUME && marks[MARK_FIRST_RESUME] == 0 )
+            marks[MARK_FIRST_RESUME] = now;
     }
 
     public static long getMark(int what) {

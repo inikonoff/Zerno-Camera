@@ -147,7 +147,7 @@ class CameraAdapter(private val activity: MainActivity) {
         val preview = preview ?: return
         if (timings.cameraOpen < ZernoHooks.getMark(ZernoHooks.MARK_RESUME)) {
             // the first set up since the app came to the front
-            timings = timings.copy(cameraOpen = SystemClock.uptimeMillis(), previewStarted = 0)
+            timings = timings.copy(cameraOpen = SystemClock.uptimeMillis(), previewStarted = 0, firstFrame = 0)
         }
         val caps = readCapabilities(preview)
         zoomRatios = if (preview.supportsZoom()) (0..preview.maxZoom).map { preview.getZoomRatio(it) } else emptyList()
@@ -280,6 +280,7 @@ class CameraAdapter(private val activity: MainActivity) {
         val now = SystemClock.uptimeMillis()
         var t = timings
         if (previewRunning && t.previewStarted == 0L && t.cameraOpen > 0L) t = t.copy(previewStarted = now)
+        if (t.previewStarted > 0L && t.firstFrame == 0L && controller?.shouldCoverPreview() == false) t = t.copy(firstFrame = now)
         if (t.press > 0L) {
             if (t.ready == 0L && !taking && ZernoHooks.getMark(ZernoHooks.MARK_CAPTURE_COMPLETED) >= t.press) t = t.copy(ready = now)
             if (t.saved == 0L && t.ready > 0L && activity.applicationInterface.imageSaver.nRealImagesToSave == 0) t = t.copy(saved = now)
@@ -303,7 +304,9 @@ class CameraAdapter(private val activity: MainActivity) {
         val t = timings.copy(
             processStart = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) Process.getStartUptimeMillis() else 0L,
             create = ZernoHooks.getMark(ZernoHooks.MARK_CREATE),
+            firstResume = ZernoHooks.getMark(ZernoHooks.MARK_FIRST_RESUME),
             resume = ZernoHooks.getMark(ZernoHooks.MARK_RESUME),
+            captureRequested = ZernoHooks.getMark(ZernoHooks.MARK_CAPTURE_REQUESTED).takeIf { it >= timings.press } ?: 0L,
             captureStarted = ZernoHooks.getMark(ZernoHooks.MARK_CAPTURE_STARTED).takeIf { it >= timings.press } ?: 0L,
             imageReceived = ZernoHooks.getMark(ZernoHooks.MARK_IMAGE_RECEIVED).takeIf { it >= timings.press } ?: 0L,
             captureCompleted = ZernoHooks.getMark(ZernoHooks.MARK_CAPTURE_COMPLETED).takeIf { it >= timings.press } ?: 0L,
@@ -377,6 +380,7 @@ class CameraAdapter(private val activity: MainActivity) {
     // ---- shooting -------------------------------------------------------------------------
 
     fun takePhoto() {
+        flushEngineUpdate() // a mode change that hasn't reached the engine yet
         val preview = preview
         if (controller == null || preview == null || !preview.isPreviewStarted) {
             // the camera is still starting: the engine would silently ignore the press, so
@@ -636,15 +640,59 @@ class CameraAdapter(private val activity: MainActivity) {
             restoreProSettings(editor)
         }
         writeModePreferences(editor, mode, detail, hdr)
+        val before = engineModeSnapshot()
         editor.apply()
         _state.update { it.copy(mode = mode, detail = detail, hdr = hdr) }
+        if (engineModeSnapshot() == before && !engineUpdatePending) {
+            // nothing changes for the engine (e.g. Photo <-> Pro with automatic exposure):
+            // no need to restart the camera preview
+            refreshPro()
+        } else {
+            // let the carousel finish moving first, and restart the preview only once if the
+            // user swipes through several modes
+            scheduleEngineUpdate(MODE_SETTLE_MS)
+        }
+    }
+
+    private var engineUpdatePending = false
+    private val engineUpdate = Runnable {
+        engineUpdatePending = false
         updateEngine()
     }
+
+    private fun scheduleEngineUpdate(delayMs: Long) {
+        engineUpdatePending = true
+        handler.removeCallbacks(engineUpdate)
+        handler.postDelayed(engineUpdate, delayMs)
+    }
+
+    private fun flushEngineUpdate() {
+        if (engineUpdatePending) {
+            handler.removeCallbacks(engineUpdate)
+            engineUpdate.run()
+        }
+    }
+
+    /** The engine preferences that a mode change can alter. */
+    private fun engineModeSnapshot(): List<Any?> = listOf(
+        prefs.getString(PreferenceKeys.PhotoModePreferenceKey, null),
+        prefs.getString(PreferenceKeys.CameraNoiseReductionModePreferenceKey, null),
+        prefs.getString(PreferenceKeys.EdgeModePreferenceKey, null),
+        prefs.getString(PreferenceKeys.ISOPreferenceKey, null),
+        prefs.getLong(PreferenceKeys.ExposureTimePreferenceKey, -1L),
+        prefs.getString(PreferenceKeys.WhiteBalancePreferenceKey, null),
+    )
 
     /** Makes the engine pick up changed preferences (this re-runs the camera set up, which in
      *  turn calls back into [onCameraSetup]).
      */
     private fun updateEngine() {
+        if (preview?.isPreviewStarting == true) {
+            // the preview is restarting in the background: the engine would ignore an update
+            // now, so try again shortly
+            scheduleEngineUpdate(ENGINE_RETRY_MS)
+            return
+        }
         ZernoHooks.suppressToastsFor(TOAST_QUIET_MS)
         activity.applicationInterface.drawPreview.updateSettings()
         activity.updateForSettings(true, "", false, false)
@@ -856,6 +904,8 @@ class CameraAdapter(private val activity: MainActivity) {
 
         private const val TOAST_QUIET_MS = 2500L
         private const val PENDING_SHOT_MS = 4000L
+        private const val MODE_SETTLE_MS = 320L
+        private const val ENGINE_RETRY_MS = 120L
         private const val QR_POLL_EVERY = 5 // polls, i.e. about twice a second
         private const val QR_LINGER_MS = 2500L
 

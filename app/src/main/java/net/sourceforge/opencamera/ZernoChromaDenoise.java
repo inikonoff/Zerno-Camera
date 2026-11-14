@@ -11,12 +11,10 @@ package net.sourceforge.opencamera;
  *  The image is processed in horizontal bands, so only a low resolution colour plane plus one
  *  band of pixels is held in memory. This class has no Android dependencies.
  *
- *  Usage: create, call accumulate() for each band from top to bottom, call finish(), then call
- *  apply() for each band from top to bottom.
+ *  Usage: create, call accumulate() for each band (of bandHeight() rows), call finish(), then
+ *  call apply() for each band. Bands may be processed in any order, and in parallel.
  */
 final class ZernoChromaDenoise {
-    /** Band heights passed to accumulate()/apply() must be a multiple of this (except the last). */
-    static final int BAND_MULTIPLE = 24;
     static final int MAX_LEVEL = 3;
 
     private final int width, height;
@@ -60,6 +58,13 @@ final class ZernoChromaDenoise {
             x_index[x] = index;
             x_weight[x] = weight;
         }
+    }
+
+    /** The height of the bands to pass to accumulate() and apply(): a whole number of blocks,
+     *  so that different bands never share a block (which lets bands be processed in parallel).
+     */
+    int bandHeight() {
+        return block * 12;
     }
 
     private static int cb(int r, int g, int b) {

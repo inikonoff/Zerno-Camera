@@ -7426,6 +7426,7 @@ public class CameraController2 extends CameraController {
     
     @Override
     public void takePicture(final PictureCallback picture, final ErrorCallback error) {
+        net.sourceforge.opencamera.ZernoHooks.mark(net.sourceforge.opencamera.ZernoHooks.MARK_CAPTURE_REQUESTED); // Zerno
         if( MyDebug.LOG )
             Log.d(TAG, "takePicture");
         long debug_time = 0;

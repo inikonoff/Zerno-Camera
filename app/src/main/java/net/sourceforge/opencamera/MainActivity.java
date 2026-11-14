@@ -3122,7 +3122,9 @@ public class MainActivity extends AppCompatActivity implements PreferenceFragmen
                     // if we ever support calling this with wait_until_started==true, beware of trying to change resolution repeatedly when the popup menu
                     // is open - as currently we'll have problems if trying to calling updateForSettings when preview is already starting on background
                     // thread (see above)
-                    preview.setupCamera(false, true, null);
+                    // Zerno: restart the preview in the background, so that the UI (e.g. the mode carousel animation) isn't blocked;
+                    // the adapter makes sure that updateForSettings() isn't called again while the preview is starting
+                    preview.setupCamera(false, !ZernoHooks.ZERNO_UI, null);
                 }
             }, DrawPreview.dim_effect_time_c+16); // +16 to allow time for a frame update to run
         }
