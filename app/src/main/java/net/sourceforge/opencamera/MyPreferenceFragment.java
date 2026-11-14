@@ -762,6 +762,7 @@ public class MyPreferenceFragment extends PreferenceFragment implements OnShared
     @Override
     public void onViewCreated(View view, Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+        ZernoHooks.prunePreferences(getPreferenceScreen()); // Zerno
 
         if( edge_to_edge_mode ) {
             handleEdgeToEdge(view);

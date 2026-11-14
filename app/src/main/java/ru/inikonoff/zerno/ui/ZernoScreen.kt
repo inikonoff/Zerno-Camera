@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -85,6 +86,17 @@ fun ZernoScreen(adapter: CameraAdapter) {
             ) {
                 Label(stringResource(R.string.zerno_hold_still), size = 14.sp)
             }
+        }
+
+        // self-timer countdown, in the middle of the preview, upright however the phone is held
+        if (state.onTimer && state.timerSeconds > 0) {
+            Label(
+                state.timerSeconds.toString(),
+                modifier = (if (middle >= 0) Modifier.align(Alignment.TopCenter).offset { IntOffset(0, middle - 60.dp.roundToPx()) }
+                else Modifier.align(Alignment.Center)).upright(state.uiRotation),
+                size = 96.sp,
+                weight = FontWeight.Light,
+            )
         }
 
         // bottom controls

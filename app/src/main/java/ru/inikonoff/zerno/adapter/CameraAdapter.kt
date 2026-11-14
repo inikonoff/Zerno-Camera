@@ -129,6 +129,8 @@ class CameraAdapter(private val activity: MainActivity) {
             shutterSound = prefs.getBoolean(PreferenceKeys.ShutterSoundPreferenceKey, true),
             jpegQuality = prefs.getString(PreferenceKeys.QualityPreferenceKey, "90")?.toIntOrNull() ?: 90,
             mirrorFront = prefs.getString(PreferenceKeys.FrontCameraMirrorKey, MIRROR_NO) == MIRROR_PHOTO,
+            geotag = prefs.getBoolean(PreferenceKeys.LocationPreferenceKey, false),
+            volumeKeys = prefs.getString(PreferenceKeys.VolumeKeysPreferenceKey, "volume_take_photo") ?: "volume_take_photo",
         )
         applyMetering(settings.metering)
         applyImageAdjustment(settings)
@@ -266,6 +268,7 @@ class CameraAdapter(private val activity: MainActivity) {
                 cameraOpen = open,
                 takingPhoto = taking,
                 onTimer = onTimer,
+                timerSeconds = if (onTimer) ((preview.timerEndTime - System.currentTimeMillis() + 999) / 1000).toInt().coerceAtLeast(0) else 0,
                 holdStill = taking && !onTimer && multiFrame,
                 saving = activity.applicationInterface.imageSaver.nRealImagesToSave > 0,
                 frontCamera = controller?.facing == CameraController.Facing.FACING_FRONT,
@@ -485,6 +488,8 @@ class CameraAdapter(private val activity: MainActivity) {
             shutterSound = prefs.getBoolean(PreferenceKeys.ShutterSoundPreferenceKey, true),
             jpegQuality = prefs.getString(PreferenceKeys.QualityPreferenceKey, "90")?.toIntOrNull() ?: 90,
             mirrorFront = prefs.getString(PreferenceKeys.FrontCameraMirrorKey, MIRROR_NO) == MIRROR_PHOTO,
+            geotag = prefs.getBoolean(PreferenceKeys.LocationPreferenceKey, false),
+            volumeKeys = prefs.getString(PreferenceKeys.VolumeKeysPreferenceKey, "volume_take_photo") ?: "volume_take_photo",
         )
         it.copy(settingsOpen = visible, settings = settings)
     }
@@ -571,6 +576,20 @@ class CameraAdapter(private val activity: MainActivity) {
     fun setShutterSound(on: Boolean) {
         prefs.edit().putBoolean(PreferenceKeys.ShutterSoundPreferenceKey, on).apply()
         _state.update { it.copy(settings = it.settings.copy(shutterSound = on)) }
+    }
+
+    /** Geotagging. Switching it on makes the engine start listening for the location, and ask
+     *  for the location permission if it doesn't have it yet.
+     */
+    fun setGeotag(on: Boolean) {
+        prefs.edit().putBoolean(PreferenceKeys.LocationPreferenceKey, on).apply()
+        _state.update { it.copy(settings = it.settings.copy(geotag = on)) }
+        activity.initLocation()
+    }
+
+    fun setVolumeKeys(action: String) {
+        prefs.edit().putString(PreferenceKeys.VolumeKeysPreferenceKey, action).apply()
+        _state.update { it.copy(settings = it.settings.copy(volumeKeys = action)) }
     }
 
     fun setJpegQuality(quality: Int) {

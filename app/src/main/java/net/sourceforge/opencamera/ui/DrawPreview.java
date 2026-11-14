@@ -2040,7 +2040,7 @@ public class DrawPreview {
                 long remaining_time = (preview.getTimerEndTime() - time_ms + 999)/1000;
                 if( MyDebug.LOG )
                     Log.d(TAG, "remaining_time: " + remaining_time);
-                if( remaining_time > 0 ) {
+                if( remaining_time > 0 && !net.sourceforge.opencamera.ZernoHooks.ZERNO_UI ) { // Zerno: the countdown is drawn by the Compose UI, which keeps it upright
                     p.setTextSize(42 * scale_font + 0.5f); // convert dps to pixels
                     p.setTextAlign(Paint.Align.CENTER);
                     String time_s;

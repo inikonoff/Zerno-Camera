@@ -33,11 +33,16 @@ data class Settings(
     val shutterSound: Boolean = true,
     val jpegQuality: Int = 90,
     val mirrorFront: Boolean = false,
+    val geotag: Boolean = false,
+    /** What the volume keys do (an engine value, see [VOLUME_KEY_ACTIONS]). */
+    val volumeKeys: String = "volume_take_photo",
 ) {
     companion object {
         const val ADJUST_RANGE = 5
         const val CHROMA_MAX = 3
         val JPEG_QUALITIES = listOf(85, 90, 95, 100)
+        /** The volume key actions offered (engine values): shutter, zoom, exposure, device volume. */
+        val VOLUME_KEY_ACTIONS = listOf("volume_take_photo", "volume_zoom", "volume_exposure", "volume_nothing")
     }
 }
 
@@ -128,6 +133,8 @@ data class UiState(
     val pro: ProState = ProState(),
     val takingPhoto: Boolean = false,
     val onTimer: Boolean = false,
+    /** Whole seconds left on the self-timer (0 when it isn't running). */
+    val timerSeconds: Int = 0,
     /** A multi-frame capture (Night, HDR) is in progress: the phone must be held still. */
     val holdStill: Boolean = false,
     val saving: Boolean = false,

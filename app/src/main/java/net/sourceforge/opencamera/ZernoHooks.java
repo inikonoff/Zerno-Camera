@@ -185,6 +185,50 @@ public final class ZernoHooks {
             throw new RuntimeException("image processing failed", failure[0]);
     }
 
+    // ---- settings ----
+
+    /** Open Camera settings that make no sense in Zerno: video, the stock on-screen controls
+     *  (which are hidden), and settings that the Zerno UI controls itself (so that nothing has
+     *  two places to be set).
+     */
+    private static final java.util.Set<String> hidden_preferences = new java.util.HashSet<>(java.util.Arrays.asList(
+            // video
+            "preference_screen_video_settings", "preference_save_video_prefix", "preference_show_video_max_amp",
+            "preference_camera2_photo_video_recording",
+            // needs the microphone, which Zerno doesn't ask for
+            "preference_audio_control", "preference_audio_noise_control_sensitivity",
+            // controlled by the Zerno UI
+            "preference_timer", "preference_edge_mode", "preference_noise_reduction_mode", "preference_grid",
+            "preference_show_angle_line", "preference_focus_peaking", "preference_focus_peaking_color",
+            "preference_camera_api", "preference_lock_orientation", "preference_thumbnail_animation",
+            // photo modes that Zerno doesn't offer
+            "preference_expo_bracketing_n_images", "preference_expo_bracketing_stops", "preference_raw_expo_bracketing",
+            "preference_raw_focus_bracketing", "preference_panorama_crop", "preference_panorama_save",
+            // the stock on-screen read-outs and buttons, which aren't shown
+            "preference_show_zoom", "preference_show_angle", "preference_show_battery", "preference_show_time", "preference_show_camera_id",
+            "preference_free_memory", "preference_show_iso", "preference_histogram",
+            "preference_ui_placement", "preference_immersive_mode", "preference_show_face_detection", "preference_show_cycle_flash",
+            "preference_show_focus_peaking", "preference_show_auto_level", "preference_show_stamp", "preference_show_textstamp",
+            "preference_show_store_location", "preference_show_cycle_raw", "preference_show_white_balance_lock",
+            "preference_show_exposure_lock", "preference_show_cycle_lock_orientation", "preference_show_preview_shots",
+            "preference_show_zoom_slider_controls", "preference_show_take_photo", "preference_show_whats_new", "preference_multi_cam_button"
+    ));
+
+    /** Removes the hidden preferences from a settings screen (and its sub-groups). */
+    static void prunePreferences(android.preference.PreferenceGroup group) {
+        if( !ZERNO_UI || group == null )
+            return;
+        for(int i=group.getPreferenceCount()-1;i>=0;i--) {
+            android.preference.Preference pref = group.getPreference(i);
+            if( pref.getKey() != null && hidden_preferences.contains(pref.getKey()) ) {
+                group.removePreference(pref);
+            }
+            else if( pref instanceof android.preference.PreferenceGroup ) {
+                prunePreferences((android.preference.PreferenceGroup)pref);
+            }
+        }
+    }
+
     // ---- exif ----
 
     /** A one-line description of Zerno's settings for the photo being taken (plain ASCII), set

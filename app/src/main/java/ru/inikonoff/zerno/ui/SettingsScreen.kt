@@ -151,6 +151,7 @@ fun SettingsScreen(state: UiState, adapter: CameraAdapter) {
                 ToggleRow(stringResource(R.string.zerno_qr_setting), settings.qrEnabled, adapter::setQrEnabled)
                 ToggleRow(stringResource(R.string.zerno_shutter_sound), settings.shutterSound, adapter::setShutterSound)
                 ToggleRow(stringResource(R.string.zerno_mirror_front), settings.mirrorFront, adapter::setMirrorFront)
+                ToggleRow(stringResource(R.string.zerno_geotag), settings.geotag, adapter::setGeotag)
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     BasicText(stringResource(R.string.zerno_jpeg_quality), modifier = Modifier.weight(1f), style = Title)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -160,6 +161,25 @@ fun SettingsScreen(state: UiState, adapter: CameraAdapter) {
                         }
                     }
                 }
+            }
+
+            Section(stringResource(R.string.zerno_volume_keys)) {
+                Segmented(
+                    // an action set in the Open Camera settings that isn't one of ours is shown too
+                    options = (Settings.VOLUME_KEY_ACTIONS + settings.volumeKeys).distinct().map {
+                        it to stringResource(
+                            when (it) {
+                                "volume_take_photo" -> R.string.zerno_volume_shutter
+                                "volume_zoom" -> R.string.zerno_volume_zoom
+                                "volume_exposure" -> R.string.zerno_volume_exposure
+                                "volume_nothing" -> R.string.zerno_volume_volume
+                                else -> R.string.zerno_volume_other
+                            }
+                        )
+                    },
+                    selected = settings.volumeKeys,
+                    onSelect = adapter::setVolumeKeys,
+                )
             }
 
             Section(null) {
