@@ -226,6 +226,30 @@ public final class ZernoHooks {
             throw new RuntimeException("image processing failed", failure[0]);
     }
 
+    // ---- exif ----
+
+    /** A one-line description of Zerno's settings for the photo being taken (plain ASCII), set
+     *  by the adapter when the shutter is pressed; written to the photo's ImageDescription tag.
+     */
+    public static volatile String exif_description;
+    /** Written to the photo's Software tag. */
+    public static volatile String exif_software;
+
+    static boolean hasCustomExif() {
+        return ZERNO_UI && exif_description != null;
+    }
+
+    static void customExif(androidx.exifinterface.media.ExifInterface exif) {
+        if( !ZERNO_UI )
+            return;
+        final String description = exif_description;
+        if( description != null )
+            exif.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_IMAGE_DESCRIPTION, description);
+        final String software = exif_software;
+        if( software != null )
+            exif.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_SOFTWARE, software);
+    }
+
     // ---- timing ----
 
     public static final int MARK_CREATE = 0; // MainActivity.onCreate()

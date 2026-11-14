@@ -16,6 +16,9 @@
         android:maxSdkVersion="28"
         tools:ignore="ScopedStorage" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Zerno: lets the built-in viewer show photos in the save folder that this installation didn't create itself (e.g. after a reinstall) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <!-- Zerno: photo only, so no RECORD_AUDIO permission and no video intents/tile/shortcut -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -64,6 +67,13 @@
             </intent-filter>
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
+        <!-- Zerno: the built-in photo viewer. Not exported and with no intent filters: it can only be opened from the camera. -->
+        <activity
+            android:name="ru.inikonoff.zerno.viewer.ViewerActivity"
+            android:exported="false"
+            android:theme="@style/ZernoViewerTheme"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            />
         <activity
             android:name="net.sourceforge.opencamera.remotecontrol.DeviceScanner"
             android:label="@string/scan_ble"

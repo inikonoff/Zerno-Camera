@@ -580,6 +580,8 @@ public class ExifHandler extends Thread {
     /** Whether custom exif tags need to be applied to the image file.
      */
     private static boolean hasCustomExif(String custom_tag_artist, String custom_tag_copyright) {
+        if( ZernoHooks.hasCustomExif() )
+            return true; // Zerno: the shooting settings are recorded in every photo
         if( custom_tag_artist != null && !custom_tag_artist.isEmpty() )
             return true;
         if( custom_tag_copyright != null && !custom_tag_copyright.isEmpty() )
@@ -604,6 +606,7 @@ public class ExifHandler extends Thread {
             // fine to ignore request.remove_device_exif, as this is a separate user option
             exif.setAttribute(ExifInterface.TAG_COPYRIGHT, custom_tag_copyright);
         }
+        ZernoHooks.customExif(exif); // Zerno
     }
 
     /** Adds exif tags for datetime from the supplied date, if not present. Needed for camera vendor

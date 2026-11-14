@@ -21,7 +21,7 @@ import kotlin.math.sin
  */
 enum class ZernoIcon {
     DETAIL, HDR, GRID, LEVEL, TIMER, SETTINGS, SWITCH_CAMERA, GALLERY,
-    FLASH_OFF, FLASH_AUTO, FLASH_ON, TORCH, EXPOSURE, QR, COPY, EYE, CLOSE,
+    FLASH_OFF, FLASH_AUTO, FLASH_ON, TORCH, EXPOSURE, QR, COPY, EYE, CLOSE, BACK, INFO,
 }
 
 @Composable
@@ -137,6 +137,12 @@ fun ZIcon(icon: ZernoIcon, tint: Color, modifier: Modifier = Modifier) {
                 }
                 drawPath(lid, tint, style = stroke)
                 drawCircle(tint, 2.6f * u, p(12f, 12f))
+            }
+            ZernoIcon.BACK -> { line(15f, 5f, 8f, 12f); line(8f, 12f, 15f, 19f) }
+            ZernoIcon.INFO -> {
+                drawCircle(tint, 8.6f * u, p(12f, 12f), style = stroke)
+                line(12f, 11f, 12f, 16.5f)
+                drawCircle(tint, 1.1f * u, p(12f, 7.7f))
             }
             ZernoIcon.CLOSE -> { line(6f, 6f, 18f, 18f); line(18f, 6f, 6f, 18f) }
             ZernoIcon.GALLERY -> {

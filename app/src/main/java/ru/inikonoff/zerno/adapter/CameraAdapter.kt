@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import net.sourceforge.opencamera.BuildConfig
 import net.sourceforge.opencamera.MainActivity
 import net.sourceforge.opencamera.PreferenceKeys
 import net.sourceforge.opencamera.R
@@ -31,6 +32,7 @@ import net.sourceforge.opencamera.ZernoHooks
 import net.sourceforge.opencamera.cameracontroller.CameraController
 import net.sourceforge.opencamera.cameracontroller.CameraController2
 import net.sourceforge.opencamera.preview.Preview
+import ru.inikonoff.zerno.viewer.ViewerActivity
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -407,6 +409,8 @@ class CameraAdapter(private val activity: MainActivity) {
                         "adjust ${s.settings.brightness}/${s.settings.contrast}/${s.settings.saturation}, size ${preview.currentPictureSize?.let { "${it.width}x${it.height}" }}",
             )
         }
+        ZernoHooks.exif_description = exifDescription(s)
+        ZernoHooks.exif_software = "Zerno ${BuildConfig.VERSION_NAME}"
         activity.takePicture(false)
         poll()
     }
@@ -416,7 +420,44 @@ class CameraAdapter(private val activity: MainActivity) {
         activity.clickedSwitchCamera(null)
     }
 
-    fun openGallery() = activity.clickedGallery(null)
+    /** Opens Zerno's own viewer on the folder that photos are saved to. (If the save location
+     *  was chosen through the Storage Access Framework, there may be no ordinary folder path:
+     *  then the system gallery is opened instead, as before.)
+     */
+    fun openGallery() {
+        val folder = saveFolder()
+        if (folder != null) ViewerActivity.start(activity, folder, trash = false) else activity.clickedGallery(null)
+    }
+
+    /** Opens the viewer on the photos from the save folder that are in the trash. */
+    fun openTrash() {
+        val folder = saveFolder() ?: return
+        showSettings(false)
+        ViewerActivity.start(activity, folder, trash = true)
+    }
+
+    private fun saveFolder(): String? {
+        val storage = activity.storageUtils
+        return if (storage.isUsingSAF) null else storage.imageFolderPath
+    }
+
+    /** Zerno's settings for the photo about to be taken, written into its EXIF (and shown by
+     *  the viewer). Plain ASCII: "Zerno: key=value; key=value".
+     */
+    private fun exifDescription(s: UiState): String = buildList {
+        add("mode=${s.mode.name.lowercase()}")
+        if (s.mode != Mode.NIGHT) add("detail=${s.detail.name.lowercase()}")
+        add("chroma=${if (s.settings.chromaDenoise == 0) "off" else "${s.settings.chromaDenoise}/${Settings.CHROMA_MAX}"}")
+        if (s.mode == Mode.PHOTO && s.hdr != Hdr.OFF) add("hdr=${s.hdr.name.lowercase()}")
+        if (s.settings.shadows != 0) add("shadows=%+d".format(s.settings.shadows))
+        if (s.settings.highlights != 0) add("highlights=%+d".format(s.settings.highlights))
+        if (s.settings.brightness != 0 || s.settings.contrast != 0 || s.settings.saturation != 0) {
+            add("adjust=brightness %+d, contrast %+d, saturation %+d".format(s.settings.brightness, s.settings.contrast, s.settings.saturation))
+        }
+        add("metering=${s.settings.metering.name.lowercase()}")
+        add("focus=${s.focusMode.removePrefix("focus_mode_")}")
+        if (s.zoom > 1.01f) add("zoom=%.1fx".format(java.util.Locale.US, s.zoom))
+    }.joinToString("; ", prefix = "Zerno: ")
 
     fun openSettings() = showSettings(true)
 
