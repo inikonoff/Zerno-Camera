@@ -2856,6 +2856,7 @@ public class MyApplicationInterface extends BasicApplicationInterface {
 
     @Override
     public void onCaptureStarted() {
+        ZernoHooks.mark(ZernoHooks.MARK_CAPTURE_STARTED); // Zerno
         if( MyDebug.LOG )
             Log.d(TAG, "onCaptureStarted");
         n_capture_images = 0;
@@ -2869,6 +2870,7 @@ public class MyApplicationInterface extends BasicApplicationInterface {
 
     @Override
     public void onPictureCompleted() {
+        ZernoHooks.mark(ZernoHooks.MARK_CAPTURE_COMPLETED); // Zerno
         if( MyDebug.LOG )
             Log.d(TAG, "onPictureCompleted");
 
@@ -3658,6 +3660,7 @@ public class MyApplicationInterface extends BasicApplicationInterface {
 
     @Override
     public boolean onPictureTaken(byte [] data, Date current_date, Location location) {
+        ZernoHooks.mark(ZernoHooks.MARK_IMAGE_RECEIVED); // Zerno
         if( MyDebug.LOG )
             Log.d(TAG, "onPictureTaken");
 
@@ -3678,6 +3681,7 @@ public class MyApplicationInterface extends BasicApplicationInterface {
 
     @Override
     public boolean onBurstPictureTaken(List<byte []> images, Date current_date, Location location) {
+        ZernoHooks.mark(ZernoHooks.MARK_IMAGE_RECEIVED); // Zerno
         if( MyDebug.LOG )
             Log.d(TAG, "onBurstPictureTaken: received " + images.size() + " images");
 

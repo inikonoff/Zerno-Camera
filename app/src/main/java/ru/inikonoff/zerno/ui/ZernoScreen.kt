@@ -161,6 +161,10 @@ fun ZernoScreen(adapter: CameraAdapter) {
 
         if (state.zernoSettingsOpen) SettingsScreen(state, adapter)
 
+        state.diagnostics?.let {
+            ReportSheet(stringResource(R.string.zerno_diagnostics), stringResource(R.string.zerno_diagnostics_text), it) { adapter.showDiagnostics(false) }
+        }
+
         state.crashReport?.let { CrashSheet(it, onClose = adapter::dismissCrashReport) }
     }
 }

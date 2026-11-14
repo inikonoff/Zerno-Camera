@@ -197,7 +197,8 @@ private fun ShutterButton(enabled: Boolean, busy: Boolean, onTimer: Boolean, onC
                         tryAwaitRelease()
                         pressed = false
                     },
-                    onTap = { if (currentEnabled) currentOnClick() },
+                    // also while the camera is still starting: the press is remembered
+                    onTap = { currentOnClick() },
                 )
             },
         contentAlignment = Alignment.Center,

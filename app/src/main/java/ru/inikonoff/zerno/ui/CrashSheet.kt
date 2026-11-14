@@ -41,7 +41,12 @@ import net.sourceforge.opencamera.R
  *  report.
  */
 @Composable
-fun CrashSheet(report: String, onClose: () -> Unit) {
+fun CrashSheet(report: String, onClose: () -> Unit) =
+    ReportSheet(stringResource(R.string.zerno_crash_title), stringResource(R.string.zerno_crash_text), report, onClose)
+
+/** A report in a scrolling box, with buttons to copy or share it. */
+@Composable
+fun ReportSheet(title: String, text: String, report: String, onClose: () -> Unit) {
     val context = LocalContext.current
     BackHandler(onBack = onClose)
     Box(
@@ -50,14 +55,14 @@ fun CrashSheet(report: String, onClose: () -> Unit) {
     ) {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Color(0xFF1C1C1E)).padding(18.dp)) {
             BasicText(
-                stringResource(R.string.zerno_crash_title),
+                title,
                 style = TextStyle(color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold),
             )
             Spacer(Modifier.height(6.dp))
-            BasicText(stringResource(R.string.zerno_crash_text), style = TextStyle(color = ZernoColors.Dim, fontSize = 13.sp, lineHeight = 18.sp))
+            BasicText(text, style = TextStyle(color = ZernoColors.Dim, fontSize = 13.sp, lineHeight = 18.sp))
             Spacer(Modifier.height(12.dp))
             Box(
-                Modifier.fillMaxWidth().heightIn(max = 300.dp).clip(RoundedCornerShape(12.dp)).background(Color(0x14FFFFFF))
+                Modifier.fillMaxWidth().heightIn(max = 380.dp).clip(RoundedCornerShape(12.dp)).background(Color(0x14FFFFFF))
                     .verticalScroll(rememberScrollState()).padding(10.dp)
             ) {
                 BasicText(report, style = TextStyle(color = Color.White, fontSize = 11.sp, lineHeight = 15.sp, fontFamily = FontFamily.Monospace))

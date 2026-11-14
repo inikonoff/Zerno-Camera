@@ -141,6 +141,8 @@ data class UiState(
     val zernoSettingsOpen: Boolean = false,
     /** The stack trace of the crash that ended the previous run, if it hasn't been dismissed. */
     val crashReport: String? = null,
+    /** The diagnostics report, while it is being shown. */
+    val diagnostics: String? = null,
     /** Vertical extent of the camera preview within the window, in pixels (0 if not yet known). */
     val previewTop: Int = 0,
     val previewBottom: Int = 0,

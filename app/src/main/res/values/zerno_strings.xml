@@ -115,4 +115,7 @@
     <string name="zerno_chroma_strong">Strong</string>
     <string name="zerno_chroma_hint">Removes coloured speckle from each photo as it is saved, without touching brightness: detail and grain stay. Works best with Detail set to Off or Min. Not shown on the preview.</string>
     <string name="zerno_detail_fast">Light</string>
+    <string name="zerno_diagnostics">Diagnostics</string>
+    <string name="zerno_diagnostics_hint">Timings and what the cameras support</string>
+    <string name="zerno_diagnostics_text">How long the last start-up and the last photo took, and what this phone\'s cameras report. Nothing is sent anywhere.</string>
 </resources>

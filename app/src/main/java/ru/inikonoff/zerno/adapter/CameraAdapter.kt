@@ -8,6 +8,8 @@ import android.graphics.Paint
 import android.os.Handler
 import android.os.Looper
 import android.preference.PreferenceManager
+import android.os.Build
+import android.os.Process
 import android.os.SystemClock
 import android.view.OrientationEventListener
 import android.view.TextureView
@@ -53,6 +55,10 @@ class CameraAdapter(private val activity: MainActivity) {
     private var qrLastSeen = 0L
     private var qrPinned = false // the QR sheet is open: keep the result, and don't scan
     private var pollCount = 0
+
+    private var timings = Timings()
+    /** A press of the shutter that came before the camera was ready: taken as soon as it is. */
+    private var pendingShotUntil = 0L
 
     /** How far the device is turned clockwise from portrait, snapped to 0/90/180/270. The camera
      *  screen is locked to portrait, so the UI turns its icons itself.
@@ -139,6 +145,10 @@ class CameraAdapter(private val activity: MainActivity) {
     /** Called whenever a camera has been (re)opened: reads what it can do. */
     fun onCameraSetup() {
         val preview = preview ?: return
+        if (timings.cameraOpen < ZernoHooks.getMark(ZernoHooks.MARK_RESUME)) {
+            // the first set up since the app came to the front
+            timings = timings.copy(cameraOpen = SystemClock.uptimeMillis(), previewStarted = 0)
+        }
         val caps = readCapabilities(preview)
         zoomRatios = if (preview.supportsZoom()) (0..preview.maxZoom).map { preview.getZoomRatio(it) } else emptyList()
 
@@ -246,6 +256,7 @@ class CameraAdapter(private val activity: MainActivity) {
         }
         updatePreviewPosition()
         val (top, bottom) = previewExtent()
+        pollTimings(open && preview.isPreviewStarted, taking, s)
         pollQr(open && !taking && !onTimer && s.mode == Mode.PHOTO && !s.settingsOpen && !s.zernoSettingsOpen && s.settings.qrEnabled)
         _state.update {
             it.copy(
@@ -261,6 +272,43 @@ class CameraAdapter(private val activity: MainActivity) {
                 previewBottom = bottom,
             )
         }
+    }
+
+    // ---- timing and diagnostics ----------------------------------------------------------
+
+    private fun pollTimings(previewRunning: Boolean, taking: Boolean, s: UiState) {
+        val now = SystemClock.uptimeMillis()
+        var t = timings
+        if (previewRunning && t.previewStarted == 0L && t.cameraOpen > 0L) t = t.copy(previewStarted = now)
+        if (t.press > 0L) {
+            if (t.ready == 0L && !taking && ZernoHooks.getMark(ZernoHooks.MARK_CAPTURE_COMPLETED) >= t.press) t = t.copy(ready = now)
+            if (t.saved == 0L && t.ready > 0L && activity.applicationInterface.imageSaver.nRealImagesToSave == 0) t = t.copy(saved = now)
+        }
+        timings = t
+        // a shutter press that came too early
+        if (pendingShotUntil > 0L) {
+            if (now > pendingShotUntil) pendingShotUntil = 0L
+            else if (previewRunning && !taking) {
+                pendingShotUntil = 0L
+                takePhoto()
+            }
+        }
+    }
+
+    fun showDiagnostics(show: Boolean) {
+        if (!show) {
+            _state.update { it.copy(diagnostics = null) }
+            return
+        }
+        val t = timings.copy(
+            processStart = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) Process.getStartUptimeMillis() else 0L,
+            create = ZernoHooks.getMark(ZernoHooks.MARK_CREATE),
+            resume = ZernoHooks.getMark(ZernoHooks.MARK_RESUME),
+            captureStarted = ZernoHooks.getMark(ZernoHooks.MARK_CAPTURE_STARTED).takeIf { it >= timings.press } ?: 0L,
+            imageReceived = ZernoHooks.getMark(ZernoHooks.MARK_IMAGE_RECEIVED).takeIf { it >= timings.press } ?: 0L,
+            captureCompleted = ZernoHooks.getMark(ZernoHooks.MARK_CAPTURE_COMPLETED).takeIf { it >= timings.press } ?: 0L,
+        )
+        _state.update { it.copy(diagnostics = Diagnostics.report(activity, t)) }
     }
 
     // ---- QR codes ------------------------------------------------------------------------
@@ -329,9 +377,22 @@ class CameraAdapter(private val activity: MainActivity) {
     // ---- shooting -------------------------------------------------------------------------
 
     fun takePhoto() {
-        if (controller == null) return
-        // no touch-to-focus point: focus and meter on the centre, under the focus square
-        preview?.zernoApplyDefaultFocusArea()
+        val preview = preview
+        if (controller == null || preview == null || !preview.isPreviewStarted) {
+            // the camera is still starting: the engine would silently ignore the press, so
+            // remember it, and take the photo the moment the camera is ready
+            pendingShotUntil = SystemClock.uptimeMillis() + PENDING_SHOT_MS
+            return
+        }
+        val s = _state.value
+        if (!s.takingPhoto && !s.onTimer) {
+            timings = timings.copy(
+                press = SystemClock.uptimeMillis(), ready = 0, saved = 0,
+                shotLabel = "mode ${s.mode}, detail ${s.detail}, hdr ${s.hdr}, focus ${s.focusMode}, flash ${s.flash}, " +
+                        "timer ${s.timer.seconds}, chroma ${s.settings.chromaDenoise}, " +
+                        "adjust ${s.settings.brightness}/${s.settings.contrast}/${s.settings.saturation}, size ${preview.currentPictureSize?.let { "${it.width}x${it.height}" }}",
+            )
+        }
         activity.takePicture(false)
         poll()
     }
@@ -794,6 +855,7 @@ class CameraAdapter(private val activity: MainActivity) {
         const val TOP_BAR_DP = 56
 
         private const val TOAST_QUIET_MS = 2500L
+        private const val PENDING_SHOT_MS = 4000L
         private const val QR_POLL_EVERY = 5 // polls, i.e. about twice a second
         private const val QR_LINGER_MS = 2500L
 

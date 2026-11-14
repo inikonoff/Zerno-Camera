@@ -136,6 +136,26 @@ public final class ZernoHooks {
         return bitmap;
     }
 
+    // ---- timing ----
+
+    public static final int MARK_CREATE = 0; // MainActivity.onCreate()
+    public static final int MARK_RESUME = 1; // MainActivity.onResume()
+    public static final int MARK_CAPTURE_STARTED = 2; // the camera has started exposing
+    public static final int MARK_IMAGE_RECEIVED = 3; // the camera has delivered the image(s)
+    public static final int MARK_CAPTURE_COMPLETED = 4; // the engine considers the photo taken
+    private static final long [] marks = new long[5];
+
+    /** Records when something happened (SystemClock.uptimeMillis()), for the diagnostics
+     *  report. May be called from any thread.
+     */
+    public static void mark(int what) {
+        marks[what] = android.os.SystemClock.uptimeMillis();
+    }
+
+    public static long getMark(int what) {
+        return marks[what];
+    }
+
     private static volatile long suppress_toasts_until; // SystemClock.uptimeMillis() time
 
     private ZernoHooks() {

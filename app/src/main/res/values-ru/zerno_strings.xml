@@ -114,4 +114,7 @@
     <string name="zerno_chroma_strong">Сильно</string>
     <string name="zerno_chroma_hint">Убирает цветные точки с каждого снимка при сохранении, не трогая яркость: детали и зерно остаются. Лучше всего работает с детализацией «Выкл» или «Мин.». На превью не видно.</string>
     <string name="zerno_detail_fast">Лёгкий</string>
+    <string name="zerno_diagnostics">Диагностика</string>
+    <string name="zerno_diagnostics_hint">Замеры времени и возможности камер</string>
+    <string name="zerno_diagnostics_text">Сколько заняли последний запуск и последний снимок и что сообщают камеры этого телефона. Отчёт никуда не отправляется.</string>
 </resources>

@@ -248,6 +248,7 @@ public class MainActivity extends AppCompatActivity implements PreferenceFragmen
         activity_count++;
         if( MyDebug.LOG )
             Log.d(TAG, "activity_count: " + activity_count);
+        ZernoHooks.mark(ZernoHooks.MARK_CREATE); // Zerno
         if( Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM ) {
             // whilst in theory this is redundant (since edge-to-edge is enabled by default on Android 15+ anyway), maybe it'll stop the Google Play warning?
             EdgeToEdge.enable(this);
@@ -1310,6 +1311,7 @@ public class MainActivity extends AppCompatActivity implements PreferenceFragmen
             Log.d(TAG, "onResume");
             debug_time = System.currentTimeMillis();
         }
+        ZernoHooks.mark(ZernoHooks.MARK_RESUME); // Zerno
         super.onResume();
         this.app_is_paused = false; // must be set before initLocation() at least
 

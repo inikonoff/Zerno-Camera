@@ -164,6 +164,7 @@ fun SettingsScreen(state: UiState, adapter: CameraAdapter) {
 
             Section(null) {
                 LinkRow(stringResource(R.string.zerno_advanced), stringResource(R.string.zerno_advanced_hint)) { adapter.openAdvancedSettings() }
+                LinkRow(stringResource(R.string.zerno_diagnostics), stringResource(R.string.zerno_diagnostics_hint)) { adapter.showDiagnostics(true) }
             }
 
             Section(stringResource(R.string.zerno_about)) {
