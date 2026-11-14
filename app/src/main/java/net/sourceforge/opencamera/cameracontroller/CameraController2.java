@@ -4912,7 +4912,8 @@ public class CameraController2 extends CameraController {
             camera_settings.ae_regions = new MeteringRectangle[areas.size()];
             int i = 0;
             for(CameraController.Area area : areas) {
-                camera_settings.ae_regions[i++] = convertAreaToMeteringRectangle(sensor_rect, area);
+                // Zerno: the area that the exposure is metered on depends on the metering mode
+                camera_settings.ae_regions[i++] = convertAreaToMeteringRectangle(sensor_rect, net.sourceforge.opencamera.ZernoHooks.meteringArea(area));
             }
             camera_settings.setAERegions(previewBuilder);
         }

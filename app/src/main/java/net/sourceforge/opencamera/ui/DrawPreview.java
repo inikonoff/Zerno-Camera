@@ -2738,7 +2738,7 @@ public class DrawPreview {
     private void doFocusAnimation(Canvas canvas, long time_ms) {
         Preview preview = main_activity.getPreview();
         CameraController camera_controller = preview.getCameraController();
-        if( camera_controller != null && continuous_focus_moving && !taking_picture ) {
+        if( camera_controller != null && continuous_focus_moving && !taking_picture && !net.sourceforge.opencamera.ZernoHooks.ZERNO_UI ) { // Zerno: no pulsing circle, the focus square is always there
             // we don't display the continuous focusing animation when taking a photo - and can also give the impression of having
             // frozen if we pause because the image saver queue is full
             long dt = time_ms - continuous_focus_moving_ms;
@@ -2775,10 +2775,12 @@ public class DrawPreview {
             }
         }
 
-        if( preview.isFocusWaiting() || preview.isFocusRecentSuccess() || preview.isFocusRecentFailure() ) {
+        // Zerno: the focus square is half the size, and is always shown (in the centre, unless the user touched to focus elsewhere)
+        final boolean zerno_ui = net.sourceforge.opencamera.ZernoHooks.ZERNO_UI;
+        if( preview.isFocusWaiting() || preview.isFocusRecentSuccess() || preview.isFocusRecentFailure() || ( zerno_ui && camera_controller != null && !preview.isPreviewPaused() ) ) {
             long time_since_focus_started = preview.timeSinceStartedAutoFocus();
-            float min_radius = (40 * scale_dp + 0.5f); // convert dps to pixels
-            float max_radius = (45 * scale_dp + 0.5f); // convert dps to pixels
+            float min_radius = ((zerno_ui ? 20 : 40) * scale_dp + 0.5f); // convert dps to pixels
+            float max_radius = ((zerno_ui ? 23 : 45) * scale_dp + 0.5f); // convert dps to pixels
             float radius = min_radius;
             if( time_since_focus_started > 0 ) {
                 final long length = 500;

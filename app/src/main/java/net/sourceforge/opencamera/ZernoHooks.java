@@ -39,6 +39,77 @@ public final class ZernoHooks {
 
     private static Listener listener;
 
+    // ---- metering ----
+
+    public static final int METERING_SPOT = 0; // on the focus area
+    public static final int METERING_CENTRE = 1; // centre-weighted: the middle of the frame
+    public static final int METERING_MATRIX = 2; // the whole frame
+    public static volatile int metering_mode = METERING_SPOT;
+
+    /** Returns the area (in the engine's -1000..1000 camera coordinates) that the exposure
+     *  should be metered on, given the focus area.
+     */
+    public static net.sourceforge.opencamera.cameracontroller.CameraController.Area meteringArea(net.sourceforge.opencamera.cameracontroller.CameraController.Area focus_area) {
+        if( !ZERNO_UI )
+            return focus_area;
+        switch( metering_mode ) {
+            case METERING_CENTRE:
+                return new net.sourceforge.opencamera.cameracontroller.CameraController.Area(new android.graphics.Rect(-500, -500, 500, 500), 1000);
+            case METERING_MATRIX:
+                return new net.sourceforge.opencamera.cameracontroller.CameraController.Area(new android.graphics.Rect(-1000, -1000, 1000, 1000), 1000);
+            default:
+                return focus_area;
+        }
+    }
+
+    // ---- image adjustment ----
+
+    /** A 4x5 colour matrix (as used by android.graphics.ColorMatrix) applied to every saved
+     *  photo, or null for no adjustment. Set by the adapter from the brightness / contrast /
+     *  saturation settings.
+     */
+    public static volatile float [] color_matrix;
+
+    /** Applies color_matrix to the photo. If there is nothing to do, returns the supplied bitmap
+     *  (which may be null, meaning that the JPEG data is saved untouched). Works in place, in
+     *  bands, so that no second full-size bitmap is needed.
+     */
+    static Bitmap adjustImage(byte [] data, Bitmap bitmap) {
+        final float [] matrix = color_matrix;
+        if( !ZERNO_UI || matrix == null )
+            return bitmap;
+        try {
+            if( bitmap == null ) {
+                bitmap = ImageUtils.loadBitmapWithRotation(data, true);
+                if( bitmap == null )
+                    return null; // couldn't decode: save the photo unadjusted
+            }
+            if( !bitmap.isMutable() ) {
+                Bitmap copy = bitmap.copy(Bitmap.Config.ARGB_8888, true);
+                if( copy == null )
+                    return bitmap;
+                bitmap.recycle();
+                bitmap = copy;
+            }
+            android.graphics.Paint paint = new android.graphics.Paint();
+            paint.setColorFilter(new android.graphics.ColorMatrixColorFilter(matrix));
+            paint.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC));
+            android.graphics.Canvas canvas = new android.graphics.Canvas(bitmap);
+            final int band_height = 256;
+            for(int y=0;y<bitmap.getHeight();y+=band_height) {
+                int h = Math.min(band_height, bitmap.getHeight() - y);
+                Bitmap band = Bitmap.createBitmap(bitmap, 0, y, bitmap.getWidth(), h);
+                canvas.drawBitmap(band, 0, y, paint);
+                if( band != bitmap )
+                    band.recycle();
+            }
+        }
+        catch(RuntimeException | OutOfMemoryError e) {
+            MyDebug.logStackTrace("ZernoHooks", "failed to adjust image", e);
+        }
+        return bitmap;
+    }
+
     private static volatile long suppress_toasts_until; // SystemClock.uptimeMillis() time
 
     private ZernoHooks() {

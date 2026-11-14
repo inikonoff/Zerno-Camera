@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -38,79 +39,17 @@ import ru.inikonoff.zerno.adapter.Ratio
 import ru.inikonoff.zerno.adapter.Timer
 import ru.inikonoff.zerno.adapter.UiState
 
-private enum class Chooser { DETAIL, HDR, FLASH, RATIO, TIMER }
-
-/** The top bar: quick switches. A switch with two positions toggles in place; one with three
- *  positions opens a row of choices in place of the bar.
+/** The top bar: flash, horizon level and settings. Everything else lives in the drawer above
+ *  the mode carousel (see [Drawer]).
  */
 @Composable
 fun TopBar(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifier) {
-    var chooser by remember { mutableStateOf<Chooser?>(null) }
-    val showDetail = state.mode != Mode.NIGHT && state.caps.details.size > 1
-    val showHdr = state.mode == Mode.PHOTO && state.caps.hdrs.size > 1
-    // a chooser whose switch has just disappeared (e.g. after a mode change) closes itself
-    val open = chooser.takeIf {
-        when (it) {
-            Chooser.DETAIL -> showDetail
-            Chooser.HDR -> showHdr
-            Chooser.FLASH -> state.caps.flashes.isNotEmpty()
-            Chooser.RATIO -> state.caps.ratios.isNotEmpty()
-            else -> true
-        }
-    }
+    var flashOpen by remember { mutableStateOf(false) }
+    val hasFlash = state.caps.flashes.isNotEmpty()
 
     Box(modifier, contentAlignment = Alignment.Center) {
-        when (open) {
-            null -> Row(
-                Modifier.fillMaxSize().padding(horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (state.caps.flashes.isNotEmpty()) {
-                    BarIcon(flashIcon(state.flash), stringResource(R.string.zerno_flash), state.flash != Flash.OFF, state.uiRotation) { chooser = Chooser.FLASH }
-                }
-                if (showDetail) {
-                    BarIcon(ZernoIcon.DETAIL, stringResource(R.string.zerno_detail), state.detail != Detail.STANDARD, state.uiRotation) { chooser = Chooser.DETAIL }
-                }
-                if (showHdr) {
-                    BarIcon(ZernoIcon.HDR, stringResource(R.string.zerno_hdr), state.hdr != Hdr.OFF, state.uiRotation) { chooser = Chooser.HDR }
-                }
-                if (state.caps.ratios.isNotEmpty()) {
-                    BarText(state.ratio?.label ?: "–", stringResource(R.string.zerno_ratio), state.uiRotation) { chooser = Chooser.RATIO }
-                }
-                BarIcon(ZernoIcon.GRID, stringResource(R.string.zerno_grid), state.grid, state.uiRotation) { adapter.setGrid(!state.grid) }
-                BarIcon(ZernoIcon.LEVEL, stringResource(R.string.zerno_level), state.level, state.uiRotation) { adapter.setLevel(!state.level) }
-                BarIcon(ZernoIcon.TIMER, stringResource(R.string.zerno_timer), state.timer != Timer.OFF, state.uiRotation) { chooser = Chooser.TIMER }
-                BarIcon(ZernoIcon.SETTINGS, stringResource(R.string.zerno_settings), false, state.uiRotation) { adapter.openSettings() }
-            }
-            Chooser.DETAIL -> ChoiceRow(
-                title = stringResource(R.string.zerno_detail),
-                options = state.caps.details.map {
-                    it to stringResource(
-                        when (it) {
-                            Detail.OFF -> R.string.zerno_detail_off
-                            Detail.MINIMAL -> R.string.zerno_detail_minimal
-                            Detail.STANDARD -> R.string.zerno_detail_standard
-                        }
-                    )
-                },
-                selected = state.detail,
-                onClose = { chooser = null },
-            ) { adapter.setDetail(it); chooser = null }
-            Chooser.HDR -> ChoiceRow(
-                title = stringResource(R.string.zerno_hdr),
-                options = state.caps.hdrs.map {
-                    it to stringResource(
-                        when (it) {
-                            Hdr.OFF -> R.string.zerno_hdr_off
-                            Hdr.DRO -> R.string.zerno_hdr_dro
-                            Hdr.HDR -> R.string.zerno_hdr_hdr
-                        }
-                    )
-                },
-                selected = state.hdr,
-                onClose = { chooser = null },
-            ) { adapter.setHdr(it); chooser = null }
-            Chooser.FLASH -> ChoiceRow(
+        if (flashOpen && hasFlash) {
+            ChoiceRow(
                 title = stringResource(R.string.zerno_flash),
                 options = state.caps.flashes.map {
                     it to stringResource(
@@ -123,65 +62,43 @@ fun TopBar(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifier
                     )
                 },
                 selected = state.flash,
-                onClose = { chooser = null },
-            ) { adapter.setFlash(it); chooser = null }
-            Chooser.RATIO -> ChoiceRow(
-                title = stringResource(R.string.zerno_ratio),
-                options = state.caps.ratios.map<Ratio, Pair<Ratio?, String>> { it to it.label },
-                selected = state.ratio,
-                onClose = { chooser = null },
-            ) { if (it != null) adapter.setRatio(it); chooser = null }
-            Chooser.TIMER -> ChoiceRow(
-                title = stringResource(R.string.zerno_timer),
-                options = Timer.entries.map {
-                    it to if (it == Timer.OFF) stringResource(R.string.zerno_timer_off)
-                    else stringResource(R.string.zerno_timer_seconds, it.seconds)
-                },
-                selected = state.timer,
-                onClose = { chooser = null },
-            ) { adapter.setTimer(it); chooser = null }
+                onClose = { flashOpen = false },
+            ) { adapter.setFlash(it); flashOpen = false }
+        } else {
+            Row(Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                BarIcon(flashIcon(state.flash), stringResource(R.string.zerno_flash), state.flash != Flash.OFF, state.uiRotation, visible = hasFlash) { flashOpen = true }
+                BarIcon(ZernoIcon.LEVEL, stringResource(R.string.zerno_level), state.level, state.uiRotation) { adapter.setLevel(!state.level) }
+                BarIcon(ZernoIcon.SETTINGS, stringResource(R.string.zerno_settings), false, state.uiRotation) { adapter.openSettings() }
+            }
         }
     }
 }
 
-private fun flashIcon(flash: String): ZernoIcon = when (flash) {
+internal fun flashIcon(flash: String): ZernoIcon = when (flash) {
     Flash.AUTO, Flash.SCREEN_AUTO -> ZernoIcon.FLASH_AUTO
     Flash.ON, Flash.SCREEN_ON -> ZernoIcon.FLASH_ON
     Flash.TORCH, Flash.SCREEN_TORCH -> ZernoIcon.TORCH
     else -> ZernoIcon.FLASH_OFF
 }
 
-/** A top bar item that shows its current value as text (the aspect ratio). */
 @Composable
-private fun RowScope.BarText(text: String, description: String, uiRotation: Int, onClick: () -> Unit) {
+private fun RowScope.BarIcon(icon: ZernoIcon, description: String, active: Boolean, uiRotation: Int, visible: Boolean = true, onClick: () -> Unit) {
     Box(
         Modifier
             .weight(1f)
             .height(48.dp)
+            .alpha(if (visible) 1f else 0f)
             .semantics { contentDescription = description }
-            .tap(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Label(text, Modifier.upright(uiRotation), size = 13.sp, weight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
-private fun RowScope.BarIcon(icon: ZernoIcon, description: String, active: Boolean, uiRotation: Int, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .weight(1f)
-            .height(48.dp)
-            .semantics { contentDescription = description }
-            .tap(onClick = onClick),
+            .tap(enabled = visible, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         ZIcon(icon, if (active) ZernoColors.Accent else ZernoColors.OnPreview, Modifier.size(24.dp).upright(uiRotation))
     }
 }
 
+/** A title followed by the choices for one switch; tapping outside the choices closes it. */
 @Composable
-private fun <T> ChoiceRow(
+internal fun <T> ChoiceRow(
     title: String,
     options: List<Pair<T, String>>,
     selected: T,

@@ -2,6 +2,9 @@ package ru.inikonoff.zerno.adapter
 
 import android.content.SharedPreferences
 import android.graphics.Bitmap
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import android.os.Handler
 import android.os.Looper
 import android.preference.PreferenceManager
@@ -107,8 +110,22 @@ class CameraAdapter(private val activity: MainActivity) {
         writeModePreferences(editor, mode, detail, hdr)
         editor.apply()
 
+        val settings = Settings(
+            metering = enumPref(KEY_METERING, Metering.SPOT),
+            brightness = prefs.getInt(KEY_BRIGHTNESS, 0),
+            contrast = prefs.getInt(KEY_CONTRAST, 0),
+            saturation = prefs.getInt(KEY_SATURATION, 0),
+            qrEnabled = prefs.getBoolean(KEY_QR, true),
+            shutterSound = prefs.getBoolean(PreferenceKeys.ShutterSoundPreferenceKey, true),
+            jpegQuality = prefs.getString(PreferenceKeys.QualityPreferenceKey, "90")?.toIntOrNull() ?: 90,
+            mirrorFront = prefs.getString(PreferenceKeys.FrontCameraMirrorKey, MIRROR_NO) == MIRROR_PHOTO,
+        )
+        applyMetering(settings.metering)
+        applyImageAdjustment(settings)
+
         _state.update {
             it.copy(
+                settings = settings,
                 mode = mode, detail = detail, hdr = hdr,
                 grid = prefs.getString(PreferenceKeys.ShowGridPreferenceKey, GRID_NONE) != GRID_NONE,
                 level = prefs.getBoolean(PreferenceKeys.ShowAngleLinePreferenceKey, false),
@@ -134,6 +151,8 @@ class CameraAdapter(private val activity: MainActivity) {
         s = s.copy(caps = caps, mode = mode, detail = detail, hdr = hdr, cameraOpen = true)
         _state.value = s
         refreshPro()
+        applyImageAdjustment(s.settings) // the preview view may be new
+        preview.zernoApplyDefaultFocusArea()
         poll()
         if (changed) {
             // the stored choice isn't available on this camera: fall back, but not from inside
@@ -224,7 +243,7 @@ class CameraAdapter(private val activity: MainActivity) {
         }
         updatePreviewPosition()
         val (top, bottom) = previewExtent()
-        pollQr(open && !taking && !onTimer && s.mode == Mode.PHOTO && !s.settingsOpen)
+        pollQr(open && !taking && !onTimer && s.mode == Mode.PHOTO && !s.settingsOpen && !s.zernoSettingsOpen && s.settings.qrEnabled)
         _state.update {
             it.copy(
                 cameraOpen = open,
@@ -308,6 +327,8 @@ class CameraAdapter(private val activity: MainActivity) {
 
     fun takePhoto() {
         if (controller == null) return
+        // no touch-to-focus point: focus and meter on the centre, under the focus square
+        preview?.zernoApplyDefaultFocusArea()
         activity.takePicture(false)
         poll()
     }
@@ -319,7 +340,7 @@ class CameraAdapter(private val activity: MainActivity) {
 
     fun openGallery() = activity.clickedGallery(null)
 
-    fun openSettings() = activity.openSettings()
+    fun openSettings() = showSettings(true)
 
     /** The engine owns its thumbnail bitmaps and recycles each one as soon as the next photo's
      *  thumbnail arrives - which can happen while Compose is still drawing the old one (drawing
@@ -350,7 +371,99 @@ class CameraAdapter(private val activity: MainActivity) {
         _state.update { it.copy(crashReport = null) }
     }
 
-    fun onSettingsVisible(visible: Boolean) = _state.update { it.copy(settingsOpen = visible) }
+    fun onSettingsVisible(visible: Boolean) = _state.update {
+        // the Open Camera settings screen may have changed settings that Zerno's own screen shows too
+        val settings = if (visible) it.settings else it.settings.copy(
+            shutterSound = prefs.getBoolean(PreferenceKeys.ShutterSoundPreferenceKey, true),
+            jpegQuality = prefs.getString(PreferenceKeys.QualityPreferenceKey, "90")?.toIntOrNull() ?: 90,
+            mirrorFront = prefs.getString(PreferenceKeys.FrontCameraMirrorKey, MIRROR_NO) == MIRROR_PHOTO,
+        )
+        it.copy(settingsOpen = visible, settings = settings)
+    }
+
+    // ---- Zerno settings ------------------------------------------------------------------
+
+    fun showSettings(show: Boolean) = _state.update { it.copy(zernoSettingsOpen = show) }
+
+    /** Opens the full Open Camera settings screen ("Advanced"). */
+    fun openAdvancedSettings() {
+        showSettings(false)
+        activity.openSettings()
+    }
+
+    fun setMetering(metering: Metering) {
+        prefs.edit().putString(KEY_METERING, metering.name).apply()
+        applyMetering(metering)
+        preview?.zernoReapplyFocusArea()
+        _state.update { it.copy(settings = it.settings.copy(metering = metering)) }
+    }
+
+    private fun applyMetering(metering: Metering) {
+        ZernoHooks.metering_mode = when (metering) {
+            Metering.SPOT -> ZernoHooks.METERING_SPOT
+            Metering.CENTRE -> ZernoHooks.METERING_CENTRE
+            Metering.MATRIX -> ZernoHooks.METERING_MATRIX
+        }
+    }
+
+    fun setImageAdjustment(brightness: Int, contrast: Int, saturation: Int) {
+        val range = -Settings.ADJUST_RANGE..Settings.ADJUST_RANGE
+        val settings = _state.value.settings.copy(
+            brightness = brightness.coerceIn(range), contrast = contrast.coerceIn(range), saturation = saturation.coerceIn(range),
+        )
+        prefs.edit()
+            .putInt(KEY_BRIGHTNESS, settings.brightness)
+            .putInt(KEY_CONTRAST, settings.contrast)
+            .putInt(KEY_SATURATION, settings.saturation)
+            .apply()
+        applyImageAdjustment(settings)
+        _state.update { it.copy(settings = settings) }
+    }
+
+    /** Brightness, contrast and saturation are one colour matrix. The engine applies it to each
+     *  photo as it is saved; the same matrix is put on the preview, so the preview shows what
+     *  the photo will look like.
+     */
+    private fun applyImageAdjustment(settings: Settings) {
+        val matrix = if (settings.brightness == 0 && settings.contrast == 0 && settings.saturation == 0) null else {
+            val scale = 1f + settings.contrast * 0.06f
+            // contrast pivots around mid grey; brightness is a straight offset
+            val offset = 127.5f * (1f - scale) + settings.brightness * 7f
+            ColorMatrix().apply {
+                setSaturation(1f + settings.saturation * 0.12f)
+                postConcat(ColorMatrix(floatArrayOf(
+                    scale, 0f, 0f, 0f, offset,
+                    0f, scale, 0f, 0f, offset,
+                    0f, 0f, scale, 0f, offset,
+                    0f, 0f, 0f, 1f, 0f,
+                )))
+            }.array.copyOf()
+        }
+        ZernoHooks.color_matrix = matrix
+        (preview?.view as? TextureView)?.setLayerPaint(
+            matrix?.let { Paint().apply { colorFilter = ColorMatrixColorFilter(it) } }
+        )
+    }
+
+    fun setQrEnabled(on: Boolean) {
+        prefs.edit().putBoolean(KEY_QR, on).apply()
+        _state.update { it.copy(settings = it.settings.copy(qrEnabled = on)) }
+    }
+
+    fun setShutterSound(on: Boolean) {
+        prefs.edit().putBoolean(PreferenceKeys.ShutterSoundPreferenceKey, on).apply()
+        _state.update { it.copy(settings = it.settings.copy(shutterSound = on)) }
+    }
+
+    fun setJpegQuality(quality: Int) {
+        prefs.edit().putString(PreferenceKeys.QualityPreferenceKey, quality.toString()).apply()
+        _state.update { it.copy(settings = it.settings.copy(jpegQuality = quality)) }
+    }
+
+    fun setMirrorFront(on: Boolean) {
+        prefs.edit().putString(PreferenceKeys.FrontCameraMirrorKey, if (on) MIRROR_PHOTO else MIRROR_NO).apply()
+        _state.update { it.copy(settings = it.settings.copy(mirrorFront = on)) }
+    }
 
     // ---- zoom -----------------------------------------------------------------------------
 
@@ -673,6 +786,13 @@ class CameraAdapter(private val activity: MainActivity) {
         private const val KEY_MODE = "zerno_mode"
         private const val KEY_DETAIL = "zerno_detail"
         private const val KEY_HDR = "zerno_hdr"
+        private const val KEY_METERING = "zerno_metering"
+        private const val KEY_BRIGHTNESS = "zerno_brightness"
+        private const val KEY_CONTRAST = "zerno_contrast"
+        private const val KEY_SATURATION = "zerno_saturation"
+        private const val KEY_QR = "zerno_qr"
+        private const val MIRROR_NO = "preference_front_camera_mirror_no"
+        private const val MIRROR_PHOTO = "preference_front_camera_mirror_photo"
         private const val KEY_PRO_ISO = "zerno_pro_iso"
         private const val KEY_PRO_SHUTTER = "zerno_pro_shutter"
         private const val KEY_PRO_WB = "zerno_pro_wb"

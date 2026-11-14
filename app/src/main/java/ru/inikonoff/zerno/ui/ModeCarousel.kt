@@ -55,7 +55,7 @@ fun ModeCarousel(modes: List<Mode>, selected: Mode, onSelect: (Mode) -> Unit, mo
     Box(
         modifier
             .fillMaxWidth()
-            .height(44.dp)
+            .height(40.dp)
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragEnd = {

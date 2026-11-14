@@ -46,6 +46,7 @@ private sealed interface Panel {
     data class Pro(val param: ProParam) : Panel
     data object Exposure : Panel
     data object Focus : Panel
+    data object Drawer : Panel
 }
 
 /** The whole camera screen, drawn over the engine's live preview. Anything not covered by a
@@ -96,6 +97,7 @@ fun ZernoScreen(adapter: CameraAdapter) {
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            DrawerHandle(open = effectivePanel == Panel.Drawer, onClick = { panel = if (effectivePanel == Panel.Drawer) null else Panel.Drawer })
             // the panels open upwards, over the bottom of the preview
             Column(Modifier.fillMaxWidth().background(Color(0x66000000))) {
                 if (state.mode == Mode.PRO) {
@@ -108,12 +110,12 @@ fun ZernoScreen(adapter: CameraAdapter) {
                 when (effectivePanel) {
                     Panel.Exposure -> ExposurePanel(state, adapter)
                     Panel.Focus -> FocusPanel(state, adapter)
+                    Panel.Drawer -> Drawer(state, adapter)
                     else -> {}
                 }
             }
-            Spacer(Modifier.height(4.dp))
             ModeCarousel(state.caps.modes, state.mode, adapter::setMode)
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
             ShutterRow(
                 state, adapter,
                 exposureOpen = effectivePanel == Panel.Exposure || effectivePanel == Panel.Pro(ProParam.EV),
@@ -125,7 +127,7 @@ fun ZernoScreen(adapter: CameraAdapter) {
                 },
                 onFocus = { panel = if (effectivePanel == Panel.Focus) null else Panel.Focus },
             )
-            Spacer(Modifier.height(22.dp))
+            Spacer(Modifier.height(14.dp))
         }
 
         // zoom sits on the preview, just above its bottom edge (or above the controls, if
@@ -138,7 +140,7 @@ fun ZernoScreen(adapter: CameraAdapter) {
                 max = state.caps.zoomMax,
                 uiRotation = state.uiRotation,
                 onZoom = adapter::setZoom,
-                modifier = Modifier.align(Alignment.TopCenter).offset { IntOffset(0, anchor - 76.dp.roundToPx()) },
+                modifier = Modifier.align(Alignment.TopCenter).offset { IntOffset(0, anchor - 62.dp.roundToPx()) },
             )
         }
 
@@ -156,6 +158,8 @@ fun ZernoScreen(adapter: CameraAdapter) {
         if (qr != null && sheetOpen) {
             QrSheet(qr) { sheetOpen = false; adapter.setQrPinned(false) }
         }
+
+        if (state.zernoSettingsOpen) SettingsScreen(state, adapter)
 
         state.crashReport?.let { CrashSheet(it, onClose = adapter::dismissCrashReport) }
     }

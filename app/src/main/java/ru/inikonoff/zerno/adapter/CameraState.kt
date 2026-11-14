@@ -18,6 +18,26 @@ enum class Ratio(val label: String, val value: Double) {
     R4_3("4:3", 4.0 / 3.0), R16_9("16:9", 16.0 / 9.0), R1_1("1:1", 1.0)
 }
 
+/** What the exposure is metered on. */
+enum class Metering { SPOT, CENTRE, MATRIX }
+
+/** Zerno's own settings, shown on the settings screen. The image adjustments run from -5 to +5. */
+data class Settings(
+    val metering: Metering = Metering.SPOT,
+    val brightness: Int = 0,
+    val contrast: Int = 0,
+    val saturation: Int = 0,
+    val qrEnabled: Boolean = true,
+    val shutterSound: Boolean = true,
+    val jpegQuality: Int = 90,
+    val mirrorFront: Boolean = false,
+) {
+    companion object {
+        const val ADJUST_RANGE = 5
+        val JPEG_QUALITIES = listOf(85, 90, 95, 100)
+    }
+}
+
 /** Engine values for the flash and focus modes that Zerno offers. */
 object Flash {
     const val OFF = "flash_off"
@@ -113,6 +133,9 @@ data class UiState(
     /** How far the device is rotated from portrait (0, 90, 180 or 270): icons counter-rotate. */
     val uiRotation: Int = 0,
     val settingsOpen: Boolean = false,
+    val settings: Settings = Settings(),
+    /** Zerno's own settings screen is showing. */
+    val zernoSettingsOpen: Boolean = false,
     /** The stack trace of the crash that ended the previous run, if it hasn't been dismissed. */
     val crashReport: String? = null,
     /** Vertical extent of the camera preview within the window, in pixels (0 if not yet known). */

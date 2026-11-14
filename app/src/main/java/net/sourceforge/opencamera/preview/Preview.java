@@ -928,6 +928,22 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         }
     }
 
+    /** Zerno: when the user hasn't touched to focus, focus and meter on the centre of the frame
+     *  (where the focus square is shown) rather than leaving it up to the camera driver.
+     */
+    public void zernoApplyDefaultFocusArea() {
+        if( !net.sourceforge.opencamera.ZernoHooks.ZERNO_UI || camera_controller == null || has_focus_area || using_face_detection || camera_controller.isCameraExtension() )
+            return;
+        camera_controller.setFocusAndMeteringArea(getAreas(0.0f, 0.0f));
+    }
+
+    /** Zerno: re-applies the current focus area (e.g. after the metering mode has changed). */
+    public void zernoReapplyFocusArea() {
+        if( camera_controller == null || using_face_detection || camera_controller.isCameraExtension() )
+            return;
+        camera_controller.setFocusAndMeteringArea(has_focus_area ? getAreas(focus_camera_x, focus_camera_y) : getAreas(0.0f, 0.0f));
+    }
+
     public void clearFocusAreas() {
         if( MyDebug.LOG )
             Log.d(TAG, "clearFocusAreas()");
@@ -945,6 +961,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         focus_area_time = -1;
         focus_success = FOCUS_DONE;
         successfully_focused = false;
+        zernoApplyDefaultFocusArea(); // Zerno
     }
 
     public void getMeasureSpec(int [] spec, int widthSpec, int heightSpec) {
