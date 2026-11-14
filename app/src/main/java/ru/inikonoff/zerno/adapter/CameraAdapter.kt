@@ -115,6 +115,7 @@ class CameraAdapter(private val activity: MainActivity) {
             brightness = prefs.getInt(KEY_BRIGHTNESS, 0),
             contrast = prefs.getInt(KEY_CONTRAST, 0),
             saturation = prefs.getInt(KEY_SATURATION, 0),
+            chromaDenoise = prefs.getInt(KEY_CHROMA, 0).coerceIn(0, Settings.CHROMA_MAX),
             qrEnabled = prefs.getBoolean(KEY_QR, true),
             shutterSound = prefs.getBoolean(PreferenceKeys.ShutterSoundPreferenceKey, true),
             jpegQuality = prefs.getString(PreferenceKeys.QualityPreferenceKey, "90")?.toIntOrNull() ?: 90,
@@ -122,6 +123,7 @@ class CameraAdapter(private val activity: MainActivity) {
         )
         applyMetering(settings.metering)
         applyImageAdjustment(settings)
+        ZernoHooks.chroma_denoise = settings.chromaDenoise
 
         _state.update {
             it.copy(
@@ -172,6 +174,7 @@ class CameraAdapter(private val activity: MainActivity) {
         val details = buildList {
             if ("off" in nrModes) add(Detail.OFF)
             if ("minimal" in nrModes) add(Detail.MINIMAL)
+            if ("fast" in nrModes) add(Detail.FAST)
             add(Detail.STANDARD)
         }
         val hdrs = buildList {
@@ -445,6 +448,16 @@ class CameraAdapter(private val activity: MainActivity) {
         )
     }
 
+    /** Colour noise removal is done by Zerno itself when a photo is saved (the camera driver
+     *  has no separate control for it), so it works whatever the "Detail" switch is set to.
+     */
+    fun setChromaDenoise(level: Int) {
+        val value = level.coerceIn(0, Settings.CHROMA_MAX)
+        prefs.edit().putInt(KEY_CHROMA, value).apply()
+        ZernoHooks.chroma_denoise = value
+        _state.update { it.copy(settings = it.settings.copy(chromaDenoise = value)) }
+    }
+
     fun setQrEnabled(on: Boolean) {
         prefs.edit().putBoolean(KEY_QR, on).apply()
         _state.update { it.copy(settings = it.settings.copy(qrEnabled = on)) }
@@ -594,6 +607,8 @@ class CameraAdapter(private val activity: MainActivity) {
         val (noiseReduction, edge) = when (effective) {
             Detail.OFF -> "off" to "off"
             Detail.MINIMAL -> "minimal" to "off"
+            // the driver's quick noise reduction, without its sharpening
+            Detail.FAST -> "fast" to "off"
             Detail.STANDARD -> CameraController.NOISE_REDUCTION_MODE_DEFAULT to CameraController.EDGE_MODE_DEFAULT
         }
         editor.putString(PreferenceKeys.CameraNoiseReductionModePreferenceKey, noiseReduction)
@@ -791,6 +806,7 @@ class CameraAdapter(private val activity: MainActivity) {
         private const val KEY_CONTRAST = "zerno_contrast"
         private const val KEY_SATURATION = "zerno_saturation"
         private const val KEY_QR = "zerno_qr"
+        private const val KEY_CHROMA = "zerno_chroma_denoise"
         private const val MIRROR_NO = "preference_front_camera_mirror_no"
         private const val MIRROR_PHOTO = "preference_front_camera_mirror_photo"
         private const val KEY_PRO_ISO = "zerno_pro_iso"

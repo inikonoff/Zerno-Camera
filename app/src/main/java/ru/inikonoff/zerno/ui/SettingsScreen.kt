@@ -114,6 +114,20 @@ fun SettingsScreen(state: UiState, adapter: CameraAdapter) {
                 )
             }
 
+            Section(stringResource(R.string.zerno_chroma)) {
+                Segmented(
+                    options = listOf(
+                        0 to stringResource(R.string.zerno_chroma_off),
+                        1 to stringResource(R.string.zerno_chroma_light),
+                        2 to stringResource(R.string.zerno_chroma_medium),
+                        3 to stringResource(R.string.zerno_chroma_strong),
+                    ),
+                    selected = settings.chromaDenoise,
+                    onSelect = adapter::setChromaDenoise,
+                )
+                BasicText(stringResource(R.string.zerno_chroma_hint), modifier = Modifier.padding(top = 10.dp), style = Hint)
+            }
+
             Section(stringResource(R.string.zerno_image)) {
                 Adjustment(stringResource(R.string.zerno_brightness), settings.brightness) {
                     adapter.setImageAdjustment(it, settings.contrast, settings.saturation)

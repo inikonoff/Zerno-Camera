@@ -6,7 +6,7 @@
 
     <string name="zerno_detail">Детализация</string>
     <string name="zerno_detail_off">Выкл</string>
-    <string name="zerno_detail_minimal">Минимум</string>
+    <string name="zerno_detail_minimal">Мин.</string>
     <string name="zerno_detail_standard">Стандарт</string>
     <string name="zerno_hdr">HDR</string>
     <string name="zerno_hdr_off">Выкл</string>
@@ -107,4 +107,11 @@
     <string name="zerno_about_text">Zerno сделано на основе Open Camera (автор — Mark Harman) с новым интерфейсом. Это свободная программа под лицензией GNU General Public License версии 3 или новее.</string>
     <string name="zerno_about_source">Исходный код</string>
     <string name="zerno_about_licence">Лицензия</string>
+    <string name="zerno_chroma">Цветной шум</string>
+    <string name="zerno_chroma_off">Выкл</string>
+    <string name="zerno_chroma_light">Слабо</string>
+    <string name="zerno_chroma_medium">Средне</string>
+    <string name="zerno_chroma_strong">Сильно</string>
+    <string name="zerno_chroma_hint">Убирает цветные точки с каждого снимка при сохранении, не трогая яркость: детали и зерно остаются. Лучше всего работает с детализацией «Выкл» или «Мин.». На превью не видно.</string>
+    <string name="zerno_detail_fast">Лёгкий</string>
 </resources>

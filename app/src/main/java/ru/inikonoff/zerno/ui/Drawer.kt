@@ -124,6 +124,7 @@ fun Drawer(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifier
                         when (it) {
                             Detail.OFF -> R.string.zerno_detail_off
                             Detail.MINIMAL -> R.string.zerno_detail_minimal
+                            Detail.FAST -> R.string.zerno_detail_fast
                             Detail.STANDARD -> R.string.zerno_detail_standard
                         }
                     )

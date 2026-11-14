@@ -70,13 +70,19 @@ public final class ZernoHooks {
      */
     public static volatile float [] color_matrix;
 
-    /** Applies color_matrix to the photo. If there is nothing to do, returns the supplied bitmap
-     *  (which may be null, meaning that the JPEG data is saved untouched). Works in place, in
-     *  bands, so that no second full-size bitmap is needed.
+    /** Strength of the colour noise removal applied to every saved photo: 0 (off) to
+     *  ZernoChromaDenoise.MAX_LEVEL.
+     */
+    public static volatile int chroma_denoise;
+
+    /** Applies the colour noise removal and color_matrix to the photo. If there is nothing to
+     *  do, returns the supplied bitmap (which may be null, meaning that the JPEG data is saved
+     *  untouched). Works in place, in bands, so that no second full-size bitmap is needed.
      */
     static Bitmap adjustImage(byte [] data, Bitmap bitmap) {
         final float [] matrix = color_matrix;
-        if( !ZERNO_UI || matrix == null )
+        final int chroma_level = chroma_denoise;
+        if( !ZERNO_UI || ( matrix == null && chroma_level <= 0 ) )
             return bitmap;
         try {
             if( bitmap == null ) {
@@ -91,17 +97,37 @@ public final class ZernoHooks {
                 bitmap.recycle();
                 bitmap = copy;
             }
-            android.graphics.Paint paint = new android.graphics.Paint();
-            paint.setColorFilter(new android.graphics.ColorMatrixColorFilter(matrix));
-            paint.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC));
-            android.graphics.Canvas canvas = new android.graphics.Canvas(bitmap);
-            final int band_height = 256;
-            for(int y=0;y<bitmap.getHeight();y+=band_height) {
-                int h = Math.min(band_height, bitmap.getHeight() - y);
-                Bitmap band = Bitmap.createBitmap(bitmap, 0, y, bitmap.getWidth(), h);
-                canvas.drawBitmap(band, 0, y, paint);
-                if( band != bitmap )
-                    band.recycle();
+            final int width = bitmap.getWidth(), height = bitmap.getHeight();
+            if( chroma_level > 0 ) {
+                ZernoChromaDenoise denoise = new ZernoChromaDenoise(width, height, chroma_level);
+                final int band_height = 4*ZernoChromaDenoise.BAND_MULTIPLE;
+                int [] pixels = new int[width*band_height];
+                for(int y=0;y<height;y+=band_height) {
+                    int h = Math.min(band_height, height - y);
+                    bitmap.getPixels(pixels, 0, width, 0, y, width, h);
+                    denoise.accumulate(pixels, y, h);
+                }
+                denoise.finish();
+                for(int y=0;y<height;y+=band_height) {
+                    int h = Math.min(band_height, height - y);
+                    bitmap.getPixels(pixels, 0, width, 0, y, width, h);
+                    denoise.apply(pixels, y, h);
+                    bitmap.setPixels(pixels, 0, width, 0, y, width, h);
+                }
+            }
+            if( matrix != null ) {
+                android.graphics.Paint paint = new android.graphics.Paint();
+                paint.setColorFilter(new android.graphics.ColorMatrixColorFilter(matrix));
+                paint.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC));
+                android.graphics.Canvas canvas = new android.graphics.Canvas(bitmap);
+                final int band_height = 256;
+                for(int y=0;y<height;y+=band_height) {
+                    int h = Math.min(band_height, height - y);
+                    Bitmap band = Bitmap.createBitmap(bitmap, 0, y, width, h);
+                    canvas.drawBitmap(band, 0, y, paint);
+                    if( band != bitmap )
+                        band.recycle();
+                }
             }
         }
         catch(RuntimeException | OutOfMemoryError e) {

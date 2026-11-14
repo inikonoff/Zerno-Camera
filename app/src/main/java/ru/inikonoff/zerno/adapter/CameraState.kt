@@ -6,7 +6,7 @@ import android.graphics.Bitmap
 enum class Mode { NIGHT, PHOTO, PRO }
 
 /** "Detail" switch: how much of the driver's noise reduction and sharpening is applied. */
-enum class Detail { OFF, MINIMAL, STANDARD }
+enum class Detail { OFF, MINIMAL, FAST, STANDARD }
 
 /** Dynamic range processing, only offered in [Mode.PHOTO]. */
 enum class Hdr { OFF, DRO, HDR }
@@ -27,6 +27,8 @@ data class Settings(
     val brightness: Int = 0,
     val contrast: Int = 0,
     val saturation: Int = 0,
+    /** Colour noise removal: 0 (off) to [CHROMA_MAX]. */
+    val chromaDenoise: Int = 0,
     val qrEnabled: Boolean = true,
     val shutterSound: Boolean = true,
     val jpegQuality: Int = 90,
@@ -34,6 +36,7 @@ data class Settings(
 ) {
     companion object {
         const val ADJUST_RANGE = 5
+        const val CHROMA_MAX = 3
         val JPEG_QUALITIES = listOf(85, 90, 95, 100)
     }
 }

@@ -7,7 +7,7 @@
 
     <string name="zerno_detail">Detail</string>
     <string name="zerno_detail_off">Off</string>
-    <string name="zerno_detail_minimal">Minimal</string>
+    <string name="zerno_detail_minimal">Min.</string>
     <string name="zerno_detail_standard">Standard</string>
     <string name="zerno_hdr">HDR</string>
     <string name="zerno_hdr_off">Off</string>
@@ -108,4 +108,11 @@
     <string name="zerno_about_text">Zerno is built on Open Camera by Mark Harman, with a new interface. It is free software under the GNU General Public License, version 3 or later.</string>
     <string name="zerno_about_source">Source code</string>
     <string name="zerno_about_licence">Licence</string>
+    <string name="zerno_chroma">Colour noise</string>
+    <string name="zerno_chroma_off">Off</string>
+    <string name="zerno_chroma_light">Light</string>
+    <string name="zerno_chroma_medium">Medium</string>
+    <string name="zerno_chroma_strong">Strong</string>
+    <string name="zerno_chroma_hint">Removes coloured speckle from each photo as it is saved, without touching brightness: detail and grain stay. Works best with Detail set to Off or Min. Not shown on the preview.</string>
+    <string name="zerno_detail_fast">Light</string>
 </resources>
