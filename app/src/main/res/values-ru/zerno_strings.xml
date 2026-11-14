@@ -94,7 +94,7 @@
     <string name="zerno_brightness">Яркость</string>
     <string name="zerno_contrast">Контраст</string>
     <string name="zerno_saturation">Насыщенность</string>
-    <string name="zerno_image_hint">Видно на превью и применяется к каждому снимку при сохранении. Файлы RAW не меняются.</string>
+    <string name="zerno_image_hint">Тени и света меняют то, как сама камера проявляет кадр. Яркость, контраст и насыщенность применяются к снимку при сохранении. Всё видно на превью.</string>
     <string name="zerno_reset">Сбросить</string>
     <string name="zerno_shooting">Съёмка</string>
     <string name="zerno_qr_setting">Читать QR-коды</string>
@@ -117,4 +117,6 @@
     <string name="zerno_diagnostics">Диагностика</string>
     <string name="zerno_diagnostics_hint">Замеры времени и возможности камер</string>
     <string name="zerno_diagnostics_text">Сколько заняли последний запуск и последний снимок и что сообщают камеры этого телефона. Отчёт никуда не отправляется.</string>
+    <string name="zerno_shadows">Тени</string>
+    <string name="zerno_highlights">Света</string>
 </resources>

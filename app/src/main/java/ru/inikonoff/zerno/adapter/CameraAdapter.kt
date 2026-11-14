@@ -1,7 +1,11 @@
 package ru.inikonoff.zerno.adapter
 
 import android.content.SharedPreferences
+import android.content.Context
 import android.graphics.Bitmap
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
+import android.hardware.camera2.CameraMetadata
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
@@ -25,6 +29,7 @@ import net.sourceforge.opencamera.PreferenceKeys
 import net.sourceforge.opencamera.R
 import net.sourceforge.opencamera.ZernoHooks
 import net.sourceforge.opencamera.cameracontroller.CameraController
+import net.sourceforge.opencamera.cameracontroller.CameraController2
 import net.sourceforge.opencamera.preview.Preview
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -118,6 +123,8 @@ class CameraAdapter(private val activity: MainActivity) {
 
         val settings = Settings(
             metering = enumPref(KEY_METERING, Metering.SPOT),
+            shadows = prefs.getInt(KEY_SHADOWS, 0),
+            highlights = prefs.getInt(KEY_HIGHLIGHTS, 0),
             brightness = prefs.getInt(KEY_BRIGHTNESS, 0),
             contrast = prefs.getInt(KEY_CONTRAST, 0),
             saturation = prefs.getInt(KEY_SATURATION, 0),
@@ -164,6 +171,7 @@ class CameraAdapter(private val activity: MainActivity) {
         _state.value = s
         refreshPro()
         applyImageAdjustment(s.settings) // the preview view may be new
+        startToneCurve()
         preview.zernoApplyDefaultFocusArea()
         poll()
         if (changed) {
@@ -230,6 +238,7 @@ class CameraAdapter(private val activity: MainActivity) {
             wbPresets = wbPresets,
             wbKelvinValues = kelvins,
             manualFocus = manualFocus,
+            toneCurve = toneCurvePoints(preview) >= 16,
             minFocusDistance = preview.minimumFocusDistance,
         )
     }
@@ -257,6 +266,7 @@ class CameraAdapter(private val activity: MainActivity) {
         updatePreviewPosition()
         val (top, bottom) = previewExtent()
         pollTimings(open && preview.isPreviewStarted, taking, s)
+        pollToneCurve()
         pollQr(open && !taking && !onTimer && s.mode == Mode.PHOTO && !s.settingsOpen && !s.zernoSettingsOpen && s.settings.qrEnabled)
         _state.update {
             it.copy(
@@ -521,6 +531,73 @@ class CameraAdapter(private val activity: MainActivity) {
         prefs.edit().putInt(KEY_CHROMA, value).apply()
         ZernoHooks.chroma_denoise = value
         _state.update { it.copy(settings = it.settings.copy(chromaDenoise = value)) }
+    }
+
+    // ---- shadows and highlights (tone curve) --------------------------------------------
+
+    private var toneCurveMaxPoints = 0
+    /** Waiting to learn the camera's own tone curve before applying ours: give up at this time. */
+    private var toneCurveDeadline = 0L
+
+    /** How many tone curve points the current camera accepts (0 if it takes no custom curve). */
+    private fun toneCurvePoints(preview: Preview): Int {
+        toneCurveMaxPoints = try {
+            val manager = activity.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            val c = manager.getCameraCharacteristics(manager.cameraIdList[preview.cameraId])
+            val modes = c.get(CameraCharacteristics.TONEMAP_AVAILABLE_TONE_MAP_MODES)
+            if (preview.usingCamera2API() && modes != null && CameraMetadata.TONEMAP_MODE_CONTRAST_CURVE in modes) {
+                c.get(CameraCharacteristics.TONEMAP_MAX_CURVE_POINTS) ?: 0
+            } else 0
+        } catch (e: Exception) {
+            0
+        }
+        return toneCurveMaxPoints
+    }
+
+    /** Called when a camera has been set up. The curve is built on top of the camera's own
+     *  curve, which is only reported while the camera is using it - so tone mapping is first
+     *  left to the camera for a moment, and our curve is applied once its curve is known.
+     */
+    private fun startToneCurve() {
+        val cameraId = preview?.cameraId ?: return
+        ZernoHooks.default_tone_curve = cameraCurves[cameraId]
+        if (cameraCurves[cameraId] != null || toneCurveMaxPoints < 16) {
+            applyToneCurve()
+        } else {
+            ZernoHooks.tone_curve = null
+            ZernoHooks.want_default_tone_curve = true
+            toneCurveDeadline = SystemClock.uptimeMillis() + TONE_CURVE_WAIT_MS
+        }
+    }
+
+    private fun pollToneCurve() {
+        if (toneCurveDeadline == 0L) return
+        val found = ZernoHooks.default_tone_curve
+        if (found != null || SystemClock.uptimeMillis() > toneCurveDeadline) {
+            toneCurveDeadline = 0L
+            ZernoHooks.want_default_tone_curve = false
+            val cameraId = preview?.cameraId
+            if (found != null && cameraId != null) cameraCurves[cameraId] = found
+            applyToneCurve()
+        }
+    }
+
+    private fun applyToneCurve() {
+        val settings = _state.value.settings
+        val curve = if (toneCurveMaxPoints >= 16) {
+            ToneCurve.build(settings.shadows, settings.highlights, ZernoHooks.default_tone_curve, toneCurveMaxPoints)
+        } else null
+        val changed = curve != null || ZernoHooks.tone_curve != null
+        ZernoHooks.tone_curve = curve
+        if (changed) (controller as? CameraController2)?.zernoApplyToneCurve()
+    }
+
+    fun setTone(shadows: Int, highlights: Int) {
+        val range = -Settings.ADJUST_RANGE..Settings.ADJUST_RANGE
+        val settings = _state.value.settings.copy(shadows = shadows.coerceIn(range), highlights = highlights.coerceIn(range))
+        prefs.edit().putInt(KEY_SHADOWS, settings.shadows).putInt(KEY_HIGHLIGHTS, settings.highlights).apply()
+        _state.update { it.copy(settings = settings) }
+        if (toneCurveDeadline == 0L) applyToneCurve() // otherwise it's applied once the camera's curve is known
     }
 
     fun setQrEnabled(on: Boolean) {
@@ -914,7 +991,13 @@ class CameraAdapter(private val activity: MainActivity) {
         private const val KEY_DETAIL = "zerno_detail"
         private const val KEY_HDR = "zerno_hdr"
         private const val KEY_METERING = "zerno_metering"
+        private const val KEY_SHADOWS = "zerno_shadows"
+        private const val KEY_HIGHLIGHTS = "zerno_highlights"
         private const val KEY_BRIGHTNESS = "zerno_brightness"
+        private const val TONE_CURVE_WAIT_MS = 1500L
+
+        /** The cameras' own tone curves, by camera id, once learnt (they don't change). */
+        private val cameraCurves = HashMap<Int, Array<FloatArray>>()
         private const val KEY_CONTRAST = "zerno_contrast"
         private const val KEY_SATURATION = "zerno_saturation"
         private const val KEY_QR = "zerno_qr"

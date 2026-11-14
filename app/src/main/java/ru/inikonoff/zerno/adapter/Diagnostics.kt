@@ -61,6 +61,10 @@ object Diagnostics {
             }
         }
         appendLine()
+        appendLine("== TONE CURVE ==")
+        appendLine("camera's own curve: ${ToneCurve.describe(net.sourceforge.opencamera.ZernoHooks.default_tone_curve)}")
+        appendLine("Zerno curve in use: ${net.sourceforge.opencamera.ZernoHooks.tone_curve?.let { ToneCurve.describe(it) } ?: "none"}")
+        appendLine()
         appendLine("== CAMERAS ==")
         try {
             val manager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager

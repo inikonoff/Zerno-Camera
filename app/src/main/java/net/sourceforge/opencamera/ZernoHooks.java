@@ -62,6 +62,47 @@ public final class ZernoHooks {
         }
     }
 
+    // ---- tone curve ----
+
+    /** The tone curve for shadows/highlights: three arrays (red, green, blue) of x,y pairs as
+     *  taken by android.hardware.camera2.params.TonemapCurve, or null to leave tone mapping to
+     *  the camera.
+     */
+    public static volatile float [][] tone_curve;
+
+    /** The tone curve the camera uses by itself, as reported in its capture results (same
+     *  format as tone_curve), or null if not known (yet).
+     */
+    public static volatile float [][] default_tone_curve;
+
+    /** Set by the adapter to ask for default_tone_curve to be read from the next capture result. */
+    public static volatile boolean want_default_tone_curve;
+
+    /** Called (on a camera thread) for each capture result of the preview. */
+    public static void captureResult(android.hardware.camera2.CaptureResult result) {
+        if( !ZERNO_UI || !want_default_tone_curve )
+            return;
+        try {
+            Integer mode = result.get(android.hardware.camera2.CaptureResult.TONEMAP_MODE);
+            if( mode == null || mode == android.hardware.camera2.CameraMetadata.TONEMAP_MODE_CONTRAST_CURVE )
+                return; // not the camera's own curve
+            android.hardware.camera2.params.TonemapCurve curve = result.get(android.hardware.camera2.CaptureResult.TONEMAP_CURVE);
+            if( curve == null )
+                return;
+            float [][] channels = new float[3][];
+            for(int channel=0;channel<3;channel++) {
+                int n = curve.getPointCount(channel);
+                channels[channel] = new float[2*n];
+                curve.copyColorCurve(channel, channels[channel], 0);
+            }
+            default_tone_curve = channels;
+            want_default_tone_curve = false;
+        }
+        catch(RuntimeException e) {
+            want_default_tone_curve = false; // don't keep trying
+        }
+    }
+
     // ---- image adjustment ----
 
     /** A 4x5 colour matrix (as used by android.graphics.ColorMatrix) applied to every saved

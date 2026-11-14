@@ -95,7 +95,7 @@
     <string name="zerno_brightness">Brightness</string>
     <string name="zerno_contrast">Contrast</string>
     <string name="zerno_saturation">Saturation</string>
-    <string name="zerno_image_hint">Shown on the preview and applied to each photo as it is saved. RAW files are not changed.</string>
+    <string name="zerno_image_hint">Shadows and highlights change how the camera itself develops the picture. Brightness, contrast and saturation are applied to each photo as it is saved. All are shown on the preview.</string>
     <string name="zerno_reset">Reset</string>
     <string name="zerno_shooting">Shooting</string>
     <string name="zerno_qr_setting">Read QR codes</string>
@@ -118,4 +118,6 @@
     <string name="zerno_diagnostics">Diagnostics</string>
     <string name="zerno_diagnostics_hint">Timings and what the cameras support</string>
     <string name="zerno_diagnostics_text">How long the last start-up and the last photo took, and what this phone\'s cameras report. Nothing is sent anywhere.</string>
+    <string name="zerno_shadows">Shadows</string>
+    <string name="zerno_highlights">Highlights</string>
 </resources>
