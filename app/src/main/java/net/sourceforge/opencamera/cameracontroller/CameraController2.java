@@ -4930,21 +4930,6 @@ public class CameraController2 extends CameraController {
         return has_focus;
     }
     
-    /** Zerno: applies a change to ZernoHooks.tone_curve to the running preview (photos pick it
-     *  up by themselves).
-     */
-    public void zernoApplyToneCurve() {
-        if( previewBuilder == null || sessionType == SessionType.SESSIONTYPE_EXTENSION )
-            return;
-        camera_settings.setTonemapProfile(previewBuilder);
-        try {
-            setRepeatingRequest();
-        }
-        catch(CameraAccessException e) {
-            MyDebug.logStackTrace(TAG, "failed to set tone curve", e);
-        }
-    }
-
     @Override
     public void clearFocusAndMetering() {
         if( MyDebug.LOG )
@@ -8409,7 +8394,6 @@ public class CameraController2 extends CameraController {
         /** Updates cached information regarding the capture result.
          */
         private void updateCachedCaptureResult(CaptureResult result) {
-            net.sourceforge.opencamera.ZernoHooks.captureResult(result); // Zerno
             if( modified_from_camera_settings ) {
                 // don't update capture results!
                 // otherwise have problem taking HDR photos twice in a row, the second one will pick up the exposure time as

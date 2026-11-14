@@ -24,8 +24,6 @@ enum class Metering { SPOT, CENTRE, MATRIX }
 /** Zerno's own settings, shown on the settings screen. The image adjustments run from -5 to +5. */
 data class Settings(
     val metering: Metering = Metering.SPOT,
-    val shadows: Int = 0,
-    val highlights: Int = 0,
     val brightness: Int = 0,
     val contrast: Int = 0,
     val saturation: Int = 0,
@@ -88,8 +86,6 @@ data class Capabilities(
     val wbPresets: List<String> = emptyList(), // engine white balance values, "auto" first
     val wbKelvinValues: List<Int> = emptyList(), // empty if manual temperature isn't supported
     val manualFocus: Boolean = false,
-    /** The camera accepts a custom tone curve (needed for the shadows/highlights settings). */
-    val toneCurve: Boolean = false,
     val minFocusDistance: Float = 0f, // in dioptres (1/metres); 0 means infinity
 ) {
     val hasEv: Boolean get() = evMin != 0 || evMax != 0

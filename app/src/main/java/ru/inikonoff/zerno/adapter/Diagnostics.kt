@@ -33,7 +33,7 @@ data class Timings(
  *  this phone tell apps they can do. It is only ever shown to the user (who may copy it).
  */
 object Diagnostics {
-    fun report(context: Context, timings: Timings, toneInfo: String): String = buildString {
+    fun report(context: Context, timings: Timings): String = buildString {
         appendLine("Zerno ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
         appendLine("${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
         appendLine()
@@ -60,9 +60,6 @@ object Diagnostics {
                 line("shutter pressed -> saved", press, saved)
             }
         }
-        appendLine()
-        appendLine("== TONE CURVE ==")
-        appendLine(toneInfo)
         appendLine()
         appendLine("== CAMERAS ==")
         try {

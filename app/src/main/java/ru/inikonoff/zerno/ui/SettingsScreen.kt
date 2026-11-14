@@ -129,10 +129,6 @@ fun SettingsScreen(state: UiState, adapter: CameraAdapter) {
             }
 
             Section(stringResource(R.string.zerno_image)) {
-                if (state.caps.toneCurve) {
-                    Adjustment(stringResource(R.string.zerno_shadows), settings.shadows) { adapter.setTone(it, settings.highlights) }
-                    Adjustment(stringResource(R.string.zerno_highlights), settings.highlights) { adapter.setTone(settings.shadows, it) }
-                }
                 Adjustment(stringResource(R.string.zerno_brightness), settings.brightness) {
                     adapter.setImageAdjustment(it, settings.contrast, settings.saturation)
                 }
@@ -142,17 +138,11 @@ fun SettingsScreen(state: UiState, adapter: CameraAdapter) {
                 Adjustment(stringResource(R.string.zerno_saturation), settings.saturation) {
                     adapter.setImageAdjustment(settings.brightness, settings.contrast, it)
                 }
-                if (state.caps.toneCurve) {
-                    LinkRow(stringResource(R.string.zerno_tone_calibrate), stringResource(R.string.zerno_tone_calibrate_hint)) {
-                        adapter.recalibrateTone()
-                        adapter.showSettings(false)
-                    }
-                }
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     BasicText(stringResource(R.string.zerno_image_hint), modifier = Modifier.weight(1f), style = Hint)
-                    if (settings.brightness != 0 || settings.contrast != 0 || settings.saturation != 0 || settings.shadows != 0 || settings.highlights != 0) {
+                    if (settings.brightness != 0 || settings.contrast != 0 || settings.saturation != 0) {
                         Spacer(Modifier.width(10.dp))
-                        Pill(stringResource(R.string.zerno_reset), selected = false) { adapter.setImageAdjustment(0, 0, 0); adapter.setTone(0, 0) }
+                        Pill(stringResource(R.string.zerno_reset), selected = false) { adapter.setImageAdjustment(0, 0, 0) }
                     }
                 }
             }

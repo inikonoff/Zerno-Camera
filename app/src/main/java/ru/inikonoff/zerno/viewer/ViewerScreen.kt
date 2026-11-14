@@ -3,6 +3,7 @@ package ru.inikonoff.zerno.viewer
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -376,14 +377,17 @@ private fun PhotoPage(
                 detectTapGestures(
                     onTap = { currentOnTap() },
                     onDoubleTap = { position ->
-                        if (scale > 1.01f) {
-                            scale = 1f
-                            offset = Offset.Zero
-                        } else {
-                            // to actual size, keeping the tapped point where it is
-                            val centre = Offset(size.width / 2f, size.height / 2f)
-                            scale = actualSize
-                            offset = clamp((position - centre) * (1f - actualSize), actualSize)
+                        // glide to actual size (keeping the tapped point where it is), or back out
+                        val startScale = scale
+                        val startOffset = offset
+                        val endScale = if (startScale > 1.01f) 1f else actualSize
+                        val centre = Offset(size.width / 2f, size.height / 2f)
+                        val endOffset = if (endScale == 1f) Offset.Zero else clamp((position - centre) * (1f - endScale), endScale)
+                        scope.launch {
+                            Animatable(0f).animateTo(1f, tween(260, easing = FastOutSlowInEasing)) {
+                                scale = startScale + (endScale - startScale) * value
+                                offset = startOffset + (endOffset - startOffset) * value
+                            }
                         }
                     },
                 )
@@ -424,22 +428,22 @@ private fun BrightnessStrip(brightness: Float, onBrightness: (Float) -> Unit, mo
     Box(
         modifier
             .fillMaxHeight()
-            .width(40.dp)
+            .width(80.dp)
             .pointerInput(Unit) {
                 detectVerticalDragGestures(onDragStart = { touched++ }) { change, dragAmount ->
                     change.consume()
                     touched++
-                    // the whole height of the screen is a little more than the whole range
-                    currentOnBrightness((current - dragAmount / size.height * 1.3f).coerceIn(0.01f, 1f))
+                    // a little over half the height of the screen covers the whole range
+                    currentOnBrightness((current - dragAmount / size.height * 1.7f).coerceIn(0.01f, 1f))
                 }
             },
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.CenterStart,
     ) {
         AnimatedVisibility(visible, enter = fadeIn(), exit = fadeOut()) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(start = 10.dp)) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(start = 18.dp)) {
                 ZIcon(ZernoIcon.EXPOSURE, Color.White, Modifier.size(18.dp))
                 Spacer(Modifier.height(8.dp))
-                Box(Modifier.width(6.dp).height(160.dp).clip(RoundedCornerShape(50)).background(Color(0x66FFFFFF)), contentAlignment = Alignment.BottomCenter) {
+                Box(Modifier.width(12.dp).height(160.dp).clip(RoundedCornerShape(50)).background(Color(0x66FFFFFF)), contentAlignment = Alignment.BottomCenter) {
                     Box(Modifier.fillMaxWidth().fillMaxHeight(brightness.coerceIn(0f, 1f)).background(ZernoColors.Accent))
                 }
             }

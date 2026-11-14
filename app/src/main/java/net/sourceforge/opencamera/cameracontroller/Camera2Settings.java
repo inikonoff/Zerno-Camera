@@ -771,17 +771,8 @@ public class Camera2Settings {
         //if( test_new )
         //    have_tonemap_profile = false;
 
-        final float [][] zerno_curve = net.sourceforge.opencamera.ZernoHooks.tone_curve;
         if( camera_controller.isExtensionSession() ) {
             // don't set for extensions
-        }
-        else if( net.sourceforge.opencamera.ZernoHooks.ZERNO_UI && zerno_curve != null ) {
-            // Zerno: the shadows/highlights tone curve
-            if( default_tonemap_mode == null ) {
-                default_tonemap_mode = builder.get(CaptureRequest.TONEMAP_MODE);
-            }
-            builder.set(CaptureRequest.TONEMAP_MODE, CaptureRequest.TONEMAP_MODE_CONTRAST_CURVE);
-            builder.set(CaptureRequest.TONEMAP_CURVE, new TonemapCurve(zerno_curve[0], zerno_curve[1], zerno_curve[2]));
         }
         else if( have_tonemap_profile ) {
             if( default_tonemap_mode == null ) {
