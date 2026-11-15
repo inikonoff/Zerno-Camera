@@ -363,6 +363,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
 
     private boolean supports_face_detection;
     private boolean using_face_detection;
+    private boolean zerno_faces_suspended; // Zerno: face detection paused while a touched focus point is in use
     private CameraController.Face [] faces_detected;
     private final RectF face_rect = new RectF();
     private boolean supports_optical_stabilization;
@@ -958,6 +959,14 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         net.sourceforge.opencamera.ZernoHooks.zerno_taps++;
         if( camera_controller == null )
             return;
+        if( using_face_detection && camera_controller instanceof net.sourceforge.opencamera.cameracontroller.CameraController2 ) {
+            // with face detection the camera focuses on faces and ignores touches; a touched
+            // point wins until the user goes back to the centre
+            ((net.sourceforge.opencamera.cameracontroller.CameraController2)camera_controller).zernoSetFacePriority(false);
+            using_face_detection = false;
+            faces_detected = null;
+            zerno_faces_suspended = true;
+        }
         long now = android.os.SystemClock.uptimeMillis();
         MotionEvent event = MotionEvent.obtain(now, now, MotionEvent.ACTION_UP, x, y, 0);
         try {
@@ -1001,6 +1010,13 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         focus_area_time = -1;
         focus_success = FOCUS_DONE;
         successfully_focused = false;
+        if( zerno_faces_suspended ) {
+            // Zerno: back from a touched point: face detection takes over again
+            zerno_faces_suspended = false;
+            using_face_detection = true;
+            if( camera_controller instanceof net.sourceforge.opencamera.cameracontroller.CameraController2 )
+                ((net.sourceforge.opencamera.cameracontroller.CameraController2)camera_controller).zernoSetFacePriority(true);
+        }
         zernoApplyDefaultFocusArea(); // Zerno
     }
 
@@ -2654,6 +2670,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 Log.d(TAG, "set up face detection");
             // get face detection supported
             this.faces_detected = null;
+            this.zerno_faces_suspended = false;
             if( this.supports_face_detection ) {
                 this.using_face_detection = applicationInterface.getFaceDetectionPref();
             }

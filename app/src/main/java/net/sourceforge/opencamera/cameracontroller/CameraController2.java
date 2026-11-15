@@ -4930,6 +4930,25 @@ public class CameraController2 extends CameraController {
         return has_focus;
     }
     
+    /** Zerno: switches the face priority of face detection off (while the user has chosen a
+     *  focus point by touch) or back on. Does nothing if face detection was never started.
+     */
+    public void zernoSetFacePriority(boolean on) {
+        if( previewBuilder == null || sessionType == SessionType.SESSIONTYPE_EXTENSION )
+            return;
+        if( camera_settings.face_detect_mode == CaptureRequest.STATISTICS_FACE_DETECT_MODE_OFF )
+            return;
+        camera_settings.has_face_detect_mode = on;
+        camera_settings.setFaceDetectMode(previewBuilder);
+        camera_settings.setSceneMode(previewBuilder);
+        try {
+            setRepeatingRequest();
+        }
+        catch(CameraAccessException e) {
+            MyDebug.logStackTrace(TAG, "failed to set face priority", e);
+        }
+    }
+
     /** Zerno: re-applies the white balance to the running preview (used when the grey-card
      *  gains in ZernoHooks.custom_wb_gains change).
      */
