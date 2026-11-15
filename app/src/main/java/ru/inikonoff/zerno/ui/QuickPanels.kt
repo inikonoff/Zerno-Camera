@@ -79,6 +79,8 @@ fun FocusPanel(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modi
                 selectedIndex = Scales.focusIndexOf(state.pro.focusDistance, caps.minFocusDistance),
                 onSelect = { adapter.setFocusDistance(Scales.focusDistanceAt(it, caps.minFocusDistance)) },
                 ticks = true,
+                startIcon = ZernoIcon.MOUNTAINS, // infinity
+                endIcon = ZernoIcon.FLOWER, // the closest focus distance
             )
         }
     }

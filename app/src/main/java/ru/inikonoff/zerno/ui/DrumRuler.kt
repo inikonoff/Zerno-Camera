@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -45,9 +46,14 @@ fun DrumRuler(
      *  other label (e.g. "A" for automatic) is drawn as text. Ticks are packed closer.
      */
     ticks: Boolean = false,
+    /** In ticks mode: how many items before the first tick are not ticks (e.g. the "A"). */
+    tickOffset: Int = 0,
+    /** In ticks mode: icons shown above the first and the last tick. */
+    startIcon: ZernoIcon? = null,
+    endIcon: ZernoIcon? = null,
 ) {
     val itemWidth = if (ticks) 20.dp else 60.dp
-    BoxWithConstraints(modifier.fillMaxWidth().height(52.dp)) {
+    BoxWithConstraints(modifier.fillMaxWidth().height(if (ticks) 64.dp else 52.dp)) {
         val itemPx = with(LocalDensity.current) { itemWidth.toPx() }
         val sidePadding = (maxWidth - itemWidth) / 2
         val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex.coerceIn(0, (labels.size - 1).coerceAtLeast(0)))
@@ -94,11 +100,24 @@ fun DrumRuler(
                     contentAlignment = Alignment.Center,
                 ) {
                     if (ticks && labels[i].isEmpty()) {
-                        // every fifth tick is longer, every tenth longer still
+                        // every fifth tick is longer, every tenth longer still; the first and the last
+                        // ones (the ends of the scale) are always long
+                        val n = i - tickOffset
                         val length = when {
-                            (i - 1) % 10 == 0 -> 22.dp
-                            (i - 1) % 5 == 0 -> 16.dp
+                            n % 10 == 0 || i == labels.lastIndex -> 22.dp
+                            n % 5 == 0 -> 16.dp
                             else -> 10.dp
+                        }
+                        val icon = when (i) {
+                            tickOffset -> startIcon
+                            labels.lastIndex -> endIcon
+                            else -> null
+                        }
+                        if (icon != null) {
+                            ZIcon(
+                                icon, if (isCentre) ZernoColors.Accent else ZernoColors.OnPreview,
+                                Modifier.align(Alignment.TopCenter).padding(top = 2.dp).size(20.dp),
+                            )
                         }
                         Canvas(Modifier.fillMaxSize()) {
                             val x = size.width / 2f

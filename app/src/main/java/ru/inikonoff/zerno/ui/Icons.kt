@@ -22,7 +22,7 @@ import kotlin.math.sin
 enum class ZernoIcon {
     DETAIL, HDR, GRID, LEVEL, TIMER, SETTINGS, SWITCH_CAMERA, GALLERY,
     FLASH_OFF, FLASH_AUTO, FLASH_ON, TORCH, EXPOSURE, QR, COPY, EYE, CLOSE, BACK, INFO,
-    METERING_SPOT, METERING_CENTRE, METERING_MATRIX, GREY_CARD, FOCUS_CENTRE,
+    METERING_SPOT, METERING_CENTRE, METERING_MATRIX, GREY_CARD, FOCUS_CENTRE, MOUNTAINS, FLOWER,
 }
 
 @Composable
@@ -156,6 +156,23 @@ fun ZIcon(icon: ZernoIcon, tint: Color, modifier: Modifier = Modifier) {
                         drawCircle(tint, 1.2f * u, p(12f, 12f))
                     }
                 }
+            }
+            ZernoIcon.MOUNTAINS -> {
+                val ridge = Path().apply {
+                    moveTo(1.5f * u, 19.5f * u); lineTo(8.5f * u, 7f * u); lineTo(13f * u, 14f * u)
+                    lineTo(16f * u, 9.5f * u); lineTo(22.5f * u, 19.5f * u); close()
+                }
+                drawPath(ridge, tint, style = stroke)
+                // a snow cap on the big peak
+                line(6.2f, 11f, 8.5f, 12.5f); line(8.5f, 12.5f, 10.5f, 10.8f)
+            }
+            ZernoIcon.FLOWER -> {
+                // five petals round a centre
+                for (i in 0 until 5) {
+                    val a = (i * 72 - 90) * PI / 180
+                    drawCircle(tint, 3.1f * u, p(12f + 5.2f * cos(a).toFloat(), 11.5f + 5.2f * sin(a).toFloat()), style = stroke)
+                }
+                drawCircle(tint, 1.9f * u, p(12f, 11.5f))
             }
             ZernoIcon.FOCUS_CENTRE -> {
                 // focus-square corners around a centre point

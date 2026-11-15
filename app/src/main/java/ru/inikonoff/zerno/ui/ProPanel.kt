@@ -167,6 +167,9 @@ fun ProPanel(
                 selectedIndex = if (pro.focusAuto) 0 else 1 + Scales.focusIndexOf(pro.focusDistance, caps.minFocusDistance),
                 onSelect = { adapter.setFocusDistance(if (it == 0) null else Scales.focusDistanceAt(it - 1, caps.minFocusDistance)) },
                 ticks = true,
+                tickOffset = 1, // the "A" comes first
+                startIcon = ZernoIcon.MOUNTAINS, // infinity
+                endIcon = ZernoIcon.FLOWER, // the closest focus distance
             )
         }
     }
