@@ -622,6 +622,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         if( MyDebug.LOG )
             Log.d(TAG, "touch event at : " + event.getX() + " , " + event.getY() + " at time " + event.getEventTime());
 
+        net.sourceforge.opencamera.ZernoHooks.touch_events++; // Zerno: for the diagnostics report
         // doesn't seem a bad idea to clear fake toasts (touching screen gets rid of standard toasts on Android 10+ at least)
         this.clearActiveFakeToast();
 
@@ -725,6 +726,10 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         // don't set focus areas on touch if the user is touching to unpause!
         // similarly if doing single touch to capture (we go straight to taking a photo)
         // and not supported for camera extensions
+        // Zerno: for the diagnostics report
+        net.sourceforge.opencamera.ZernoHooks.last_touch_focus = "at " + (int)event.getX() + "," + (int)event.getY() +
+                ": camera " + (camera_controller != null) + ", face detection " + using_face_detection + ", preview paused " + was_paused +
+                ", touch capture " + touch_capture + ", extension " + (camera_controller != null && camera_controller.isCameraExtension());
         if( camera_controller != null && !this.using_face_detection && !was_paused && !touch_capture && !camera_controller.isCameraExtension() ) {
             if( clear_focus_areas ) {
                 // double tap to clear focus areas
@@ -779,6 +784,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         // don't auto focus on touch if the user is touching to unpause!
         if( !was_paused ) {
             // if clear_focus_areas==true, don't want to reenter autofocus_in_continuous_mode mode
+            net.sourceforge.opencamera.ZernoHooks.last_touch_focus += "; reset " + clear_focus_areas + ", focus area set " + has_focus_area; // Zerno
             tryAutoFocus(false, !clear_focus_areas);
         }
         return true;
@@ -942,6 +948,25 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         if( camera_controller == null || using_face_detection || camera_controller.isCameraExtension() )
             return;
         camera_controller.setFocusAndMeteringArea(has_focus_area ? getAreas(focus_camera_x, focus_camera_y) : getAreas(0.0f, 0.0f));
+    }
+
+    /** Zerno: a tap on the preview at (x, y) in this view's coordinates, delivered by the Zerno
+     *  UI: focuses and meters there (or, if it quickly follows the previous tap, goes back to
+     *  the centre), exactly as a touch on the preview itself would.
+     */
+    public void zernoTap(float x, float y) {
+        net.sourceforge.opencamera.ZernoHooks.zerno_taps++;
+        if( camera_controller == null )
+            return;
+        long now = android.os.SystemClock.uptimeMillis();
+        MotionEvent event = MotionEvent.obtain(now, now, MotionEvent.ACTION_UP, x, y, 0);
+        try {
+            this.clearActiveFakeToast();
+            handleSingleTouch(event, this.preview_started_state != PREVIEW_STARTED);
+        }
+        finally {
+            event.recycle();
+        }
     }
 
     /** Zerno: moves the focus (and metering) point back to the centre of the frame, after the

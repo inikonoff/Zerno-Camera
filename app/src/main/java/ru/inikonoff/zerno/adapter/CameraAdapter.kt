@@ -344,7 +344,8 @@ class CameraAdapter(private val activity: MainActivity) {
             imageReceived = ZernoHooks.getMark(ZernoHooks.MARK_IMAGE_RECEIVED).takeIf { it >= timings.press } ?: 0L,
             captureCompleted = ZernoHooks.getMark(ZernoHooks.MARK_CAPTURE_COMPLETED).takeIf { it >= timings.press } ?: 0L,
         )
-        _state.update { it.copy(diagnostics = Diagnostics.report(activity, t, smoothness.toList())) }
+        _state.update { it.copy(diagnostics = Diagnostics.report(activity, t, smoothness.toList(),
+            "touches reaching the camera view: ${ZernoHooks.touch_events}, taps from the Zerno UI: ${ZernoHooks.zerno_taps}\nlast: ${ZernoHooks.last_touch_focus}\nfocus point now: ${if (preview?.hasFocusArea() == true) "set by touch" else "centre"}")) }
     }
 
     // ---- QR codes ------------------------------------------------------------------------
@@ -459,6 +460,25 @@ class CameraAdapter(private val activity: MainActivity) {
      *  was chosen through the Storage Access Framework, there may be no ordinary folder path:
      *  then the system gallery is opened instead, as before.)
      */
+    /** A tap on the preview, at a position in window coordinates. */
+    fun tapPreview(windowX: Float, windowY: Float) {
+        val view = preview?.view ?: return
+        val location = IntArray(2)
+        view.getLocationInWindow(location)
+        val x = windowX - location[0]
+        val y = windowY - location[1]
+        if (x < 0f || y < 0f || x > view.width || y > view.height) return // outside the preview
+        preview?.zernoTap(x, y)
+        poll()
+    }
+
+    /** Pinch on the preview: scales the zoom. */
+    fun pinchZoom(factor: Float) {
+        val s = _state.value
+        if (!s.caps.hasZoom) return
+        setZoom(s.zoom * factor)
+    }
+
     /** Back to focusing and metering on the centre of the frame. */
     fun resetFocusPoint() {
         preview?.zernoResetFocusPoint()

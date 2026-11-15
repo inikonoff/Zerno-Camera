@@ -33,7 +33,7 @@ data class Timings(
  *  this phone tell apps they can do. It is only ever shown to the user (who may copy it).
  */
 object Diagnostics {
-    fun report(context: Context, timings: Timings, smoothness: List<String>): String = buildString {
+    fun report(context: Context, timings: Timings, smoothness: List<String>, touchInfo: String): String = buildString {
         appendLine("Zerno ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
         appendLine("${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
         appendLine()
@@ -60,6 +60,9 @@ object Diagnostics {
                 line("shutter pressed -> saved", press, saved)
             }
         }
+        appendLine()
+        appendLine("== TOUCH FOCUS ==")
+        appendLine(touchInfo)
         appendLine()
         appendLine("== SMOOTHNESS (camera screen, last seconds before this report) ==")
         if (smoothness.isEmpty()) appendLine("(not measured yet)") else smoothness.forEach { appendLine(it) }
@@ -121,6 +124,7 @@ object Diagnostics {
         appendLine("edge modes: ${c.get(CameraCharacteristics.EDGE_AVAILABLE_EDGE_MODES)?.joinToString(",")}")
         appendLine("tonemap modes: ${c.get(CameraCharacteristics.TONEMAP_AVAILABLE_TONE_MAP_MODES)?.joinToString(",")}, max curve points: ${c.get(CameraCharacteristics.TONEMAP_MAX_CURVE_POINTS)}")
         appendLine("exposure compensation: step ${c.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP)} EV, range ${c.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE)}")
+        appendLine("optical stabilisation (OIS): ${c.get(CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION)?.contains(1) == true}")
         appendLine("metering regions: AE ${c.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE)}, AF ${c.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AF)}")
         appendLine("ISO range: ${c.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)}, exposure range (ns): ${c.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)}")
         appendLine("focal lengths: ${c.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)?.joinToString(",")}, apertures: ${c.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)?.joinToString(",")}")

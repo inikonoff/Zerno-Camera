@@ -301,6 +301,12 @@ public final class ZernoHooks {
             exif.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_SOFTWARE, software);
     }
 
+    // ---- touch focus (diagnostics) ----
+
+    public static volatile int touch_events; // touch events that reached the engine's preview view
+    public static volatile int zerno_taps; // taps passed on by the Zerno UI
+    public static volatile String last_touch_focus = "none";
+
     // ---- timing ----
 
     public static final int MARK_CREATE = 0; // MainActivity.onCreate()

@@ -23,6 +23,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -67,6 +72,20 @@ fun ZernoScreen(adapter: CameraAdapter) {
     var sheetOpen by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize()) {
+        // taps and pinches on the preview: handled here rather than left to the camera view
+        // underneath, so that they work whatever is drawn over the preview
+        var rootOffset by remember { mutableStateOf(Offset.Zero) }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .onGloballyPositioned { rootOffset = it.positionInWindow() }
+                .pointerInput(Unit) {
+                    detectTapGestures { position -> adapter.tapPreview(rootOffset.x + position.x, rootOffset.y + position.y) }
+                }
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, _, zoom, _ -> if (zoom != 1f) adapter.pinchZoom(zoom) }
+                }
+        )
         // top bar
         Box(
             Modifier
