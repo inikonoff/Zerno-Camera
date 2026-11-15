@@ -172,6 +172,8 @@ data class UiState(
     /** The stack trace of the crash that ended the previous run, if it hasn't been dismissed. */
     val crashReport: String? = null,
     val greyCard: GreyCardState? = null,
+    /** A focus point was chosen by touching the preview (rather than the default centre). */
+    val focusPointSet: Boolean = false,
     /** The diagnostics report, while it is being shown. */
     val diagnostics: String? = null,
     /** Vertical extent of the camera preview within the window, in pixels (0 if not yet known). */

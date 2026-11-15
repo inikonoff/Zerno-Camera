@@ -18,6 +18,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -85,6 +90,32 @@ fun ZernoScreen(adapter: CameraAdapter) {
                 Modifier.clip(RoundedCornerShape(50)).background(Color(0x99000000)).padding(horizontal = 18.dp, vertical = 9.dp)
             ) {
                 Label(stringResource(R.string.zerno_hold_still), size = 14.sp)
+            }
+        }
+
+        // a focus point chosen by touch: a button to move it back to the centre
+        // (a quick second tap on the preview does the same)
+        AnimatedVisibility(
+            visible = state.focusPointSet && state.greyCard == null,
+            enter = fadeIn(), exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopStart).offset {
+                IntOffset(12.dp.roundToPx(), (if (state.previewTop > 0) state.previewTop else 0) + 12.dp.roundToPx())
+            },
+        ) {
+            val description = stringResource(R.string.zerno_focus_reset_description)
+            Row(
+                Modifier
+                    .upright(state.uiRotation)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0x99000000))
+                    .semantics { contentDescription = description }
+                    .tap(onClick = adapter::resetFocusPoint)
+                    .padding(start = 10.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ZIcon(ZernoIcon.FOCUS_CENTRE, Color.White, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Label(stringResource(R.string.zerno_focus_reset), size = 13.sp)
             }
         }
 

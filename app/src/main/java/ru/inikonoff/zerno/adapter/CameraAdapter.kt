@@ -294,6 +294,7 @@ class CameraAdapter(private val activity: MainActivity) {
                 cameraOpen = open,
                 takingPhoto = taking,
                 onTimer = onTimer,
+                focusPointSet = open && preview.hasFocusArea(),
                 timerSeconds = if (onTimer) ((preview.timerEndTime - System.currentTimeMillis() + 999) / 1000).toInt().coerceAtLeast(0) else 0,
                 holdStill = taking && !onTimer && multiFrame,
                 saving = activity.applicationInterface.imageSaver.nRealImagesToSave > 0,
@@ -458,6 +459,12 @@ class CameraAdapter(private val activity: MainActivity) {
      *  was chosen through the Storage Access Framework, there may be no ordinary folder path:
      *  then the system gallery is opened instead, as before.)
      */
+    /** Back to focusing and metering on the centre of the frame. */
+    fun resetFocusPoint() {
+        preview?.zernoResetFocusPoint()
+        poll()
+    }
+
     fun openGallery() {
         val folder = saveFolder()
         if (folder != null) ViewerActivity.start(activity, folder, trash = false) else activity.clickedGallery(null)

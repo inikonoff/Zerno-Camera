@@ -944,6 +944,21 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         camera_controller.setFocusAndMeteringArea(has_focus_area ? getAreas(focus_camera_x, focus_camera_y) : getAreas(0.0f, 0.0f));
     }
 
+    /** Zerno: moves the focus (and metering) point back to the centre of the frame, after the
+     *  user had chosen one by touching the preview.
+     */
+    public void zernoResetFocusPoint() {
+        if( camera_controller == null || !has_focus_area )
+            return;
+        removePendingContinuousFocusReset();
+        clearFocusAreas(); // this applies the centre area again
+        continuousFocusReset(); // back to continuous focus, if that's the focus mode
+        String ui_focus_value = getCurrentFocusValue();
+        if( ui_focus_value != null && ( ui_focus_value.equals("focus_mode_auto") || ui_focus_value.equals("focus_mode_macro") ) ) {
+            requestAutoFocus();
+        }
+    }
+
     public void clearFocusAreas() {
         if( MyDebug.LOG )
             Log.d(TAG, "clearFocusAreas()");
@@ -7129,7 +7144,8 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             successfully_focused = true;
             successfully_focused_time = focus_complete_time;
         }
-        if( manual && camera_controller != null && autofocus_in_continuous_mode ) {
+        // Zerno: a focus point chosen by touch stays until the user resets it, rather than going back to continuous focus after a few seconds
+        if( manual && camera_controller != null && autofocus_in_continuous_mode && !(net.sourceforge.opencamera.ZernoHooks.ZERNO_UI && has_focus_area) ) {
             String current_ui_focus_value = getCurrentFocusValue();
             if( MyDebug.LOG )
                 Log.d(TAG, "current_ui_focus_value: " + current_ui_focus_value);

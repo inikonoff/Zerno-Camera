@@ -22,7 +22,7 @@ import kotlin.math.sin
 enum class ZernoIcon {
     DETAIL, HDR, GRID, LEVEL, TIMER, SETTINGS, SWITCH_CAMERA, GALLERY,
     FLASH_OFF, FLASH_AUTO, FLASH_ON, TORCH, EXPOSURE, QR, COPY, EYE, CLOSE, BACK, INFO,
-    METERING_SPOT, METERING_CENTRE, METERING_MATRIX, GREY_CARD,
+    METERING_SPOT, METERING_CENTRE, METERING_MATRIX, GREY_CARD, FOCUS_CENTRE,
 }
 
 @Composable
@@ -156,6 +156,14 @@ fun ZIcon(icon: ZernoIcon, tint: Color, modifier: Modifier = Modifier) {
                         drawCircle(tint, 1.2f * u, p(12f, 12f))
                     }
                 }
+            }
+            ZernoIcon.FOCUS_CENTRE -> {
+                // focus-square corners around a centre point
+                line(4f, 8f, 4f, 4f); line(4f, 4f, 8f, 4f)
+                line(16f, 4f, 20f, 4f); line(20f, 4f, 20f, 8f)
+                line(4f, 16f, 4f, 20f); line(4f, 20f, 8f, 20f)
+                line(16f, 20f, 20f, 20f); line(20f, 20f, 20f, 16f)
+                drawCircle(tint, 1.8f * u, p(12f, 12f))
             }
             ZernoIcon.GREY_CARD -> {
                 drawRoundRect(tint, p(4f, 4f), Size(16f * u, 16f * u), CornerRadius(2.5f * u), style = stroke)

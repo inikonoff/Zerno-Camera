@@ -175,4 +175,6 @@
     <string name="zerno_grey_too_dark">Слишком темно: добавьте света или возьмите карту светлее</string>
     <string name="zerno_grey_too_bright">Слишком светло: карта пересвечена</string>
     <string name="zerno_grey_failed">Не получилось замерить, попробуйте ещё раз</string>
+    <string name="zerno_focus_reset">В центр</string>
+    <string name="zerno_focus_reset_description">Вернуть точку фокусировки в центр</string>
 </resources>
