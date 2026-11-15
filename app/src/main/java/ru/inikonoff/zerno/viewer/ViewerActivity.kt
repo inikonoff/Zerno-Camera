@@ -56,7 +56,9 @@ class ViewerActivity : ComponentActivity() {
         }
         trashMode = intent.getBooleanExtra(EXTRA_TRASH, false)
         repository = MediaRepository(applicationContext, folder)
-        brightness = currentBrightness()
+        // the brightness chosen last time, if any; otherwise the system brightness
+        val saved = PreferenceManager.getDefaultSharedPreferences(this).getFloat(KEY_BRIGHTNESS, -1f)
+        if (saved > 0f) applyBrightness(saved, remember = false) else brightness = currentBrightness()
         askForPermissionOnce()
         reload()
 
@@ -143,9 +145,12 @@ class ViewerActivity : ComponentActivity() {
     }
 
     /** Brightness of this screen only (0..1); the system setting is not touched. */
-    private fun applyBrightness(value: Float) {
+    private fun applyBrightness(value: Float) = applyBrightness(value, remember = true)
+
+    private fun applyBrightness(value: Float, remember: Boolean) {
         brightness = value.coerceIn(0.01f, 1f)
         window.attributes = window.attributes.apply { screenBrightness = brightness }
+        if (remember) PreferenceManager.getDefaultSharedPreferences(this).edit().putFloat(KEY_BRIGHTNESS, brightness).apply()
     }
 
     // ---- permission -----------------------------------------------------------------------
@@ -171,6 +176,7 @@ class ViewerActivity : ComponentActivity() {
         private const val EXTRA_FOLDER = "folder"
         private const val EXTRA_TRASH = "trash"
         private const val KEY_ASKED_PERMISSION = "zerno_viewer_asked_permission"
+        private const val KEY_BRIGHTNESS = "zerno_viewer_brightness"
 
         /** @param folder the absolute path of the folder the camera saves to. */
         fun start(context: Context, folder: String, trash: Boolean) {

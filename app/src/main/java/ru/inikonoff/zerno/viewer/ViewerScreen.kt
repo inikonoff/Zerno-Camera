@@ -205,10 +205,11 @@ fun ViewerScreen(
                 InfoPanel(current, repository)
             }
             if (trashMode && current != null && chrome) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    TextButton(stringResource(R.string.zerno_trash_restore), primary = true) { onRestore(current) }
-                    TextButton(stringResource(R.string.zerno_trash_delete), primary = false) { confirm = Confirm.Delete(current) }
-                    TextButton(stringResource(R.string.zerno_trash_empty), primary = false) { confirm = Confirm.EmptyTrash }
+                // three equal buttons across the width, so that they always fit
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(stringResource(R.string.zerno_trash_restore), primary = true, Modifier.weight(1f)) { onRestore(current) }
+                    TextButton(stringResource(R.string.zerno_trash_delete_short), primary = false, Modifier.weight(1f)) { confirm = Confirm.Delete(current) }
+                    TextButton(stringResource(R.string.zerno_trash_empty), primary = false, Modifier.weight(1f)) { confirm = Confirm.EmptyTrash }
                 }
             }
         }
@@ -474,13 +475,14 @@ private fun BarButton(icon: ZernoIcon, description: String, tint: Color, modifie
 }
 
 @Composable
-private fun TextButton(text: String, primary: Boolean, onClick: () -> Unit) {
+private fun TextButton(text: String, primary: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
-        Modifier
+        modifier
             .clip(RoundedCornerShape(50))
             .background(if (primary) ZernoColors.Accent else Color(0x33FFFFFF))
             .tap(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 11.dp),
+            .padding(horizontal = 14.dp, vertical = 11.dp),
+        contentAlignment = Alignment.Center,
     ) {
         BasicText(text, maxLines = 1, style = TextStyle(color = if (primary) Color.Black else Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold))
     }

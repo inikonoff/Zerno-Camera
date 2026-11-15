@@ -294,7 +294,7 @@ class CameraAdapter(private val activity: MainActivity) {
                 cameraOpen = open,
                 takingPhoto = taking,
                 onTimer = onTimer,
-                focusPointSet = open && preview.hasFocusArea(),
+                focusPointSet = (open && preview.hasFocusArea()).also { set -> if (set && !s.focusPointSet) maybeShowFocusHint() },
                 timerSeconds = if (onTimer) ((preview.timerEndTime - System.currentTimeMillis() + 999) / 1000).toInt().coerceAtLeast(0) else 0,
                 holdStill = taking && !onTimer && multiFrame,
                 saving = activity.applicationInterface.imageSaver.nRealImagesToSave > 0,
@@ -477,6 +477,14 @@ class CameraAdapter(private val activity: MainActivity) {
         val s = _state.value
         if (!s.caps.hasZoom) return
         setZoom(s.zoom * factor)
+    }
+
+    /** The first time the user picks a focus point, says (once) how to get back to the centre. */
+    private fun maybeShowFocusHint() {
+        if (prefs.getBoolean(KEY_FOCUS_HINT_SHOWN, false)) return
+        prefs.edit().putBoolean(KEY_FOCUS_HINT_SHOWN, true).apply()
+        handler.post { _state.update { it.copy(focusHint = true) } }
+        handler.postDelayed({ _state.update { it.copy(focusHint = false) } }, FOCUS_HINT_MS)
     }
 
     /** Back to focusing and metering on the centre of the frame. */
@@ -1348,6 +1356,8 @@ class CameraAdapter(private val activity: MainActivity) {
         private const val KEY_CONTRAST = "zerno_contrast"
         private const val KEY_SATURATION = "zerno_saturation"
         private const val KEY_QR = "zerno_qr"
+        private const val KEY_FOCUS_HINT_SHOWN = "zerno_focus_hint_shown"
+        private const val FOCUS_HINT_MS = 3500L
         private const val KEY_PRIORITY = "zerno_exposure_priority"
         private const val KEY_PRIORITY_ISO = "zerno_priority_iso"
         private const val KEY_PRIORITY_SHUTTER = "zerno_priority_shutter"

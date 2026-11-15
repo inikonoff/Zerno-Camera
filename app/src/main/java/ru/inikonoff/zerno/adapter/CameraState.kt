@@ -174,6 +174,8 @@ data class UiState(
     val greyCard: GreyCardState? = null,
     /** A focus point was chosen by touching the preview (rather than the default centre). */
     val focusPointSet: Boolean = false,
+    /** Showing the one-time hint that a double tap brings the focus point back to the centre. */
+    val focusHint: Boolean = false,
     /** The diagnostics report, while it is being shown. */
     val diagnostics: String? = null,
     /** Vertical extent of the camera preview within the window, in pixels (0 if not yet known). */

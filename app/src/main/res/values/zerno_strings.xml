@@ -176,6 +176,6 @@
     <string name="zerno_grey_too_dark">Too dark: add light or point at a brighter grey</string>
     <string name="zerno_grey_too_bright">Too bright: the card is overexposed</string>
     <string name="zerno_grey_failed">Couldn\'t measure, try again</string>
-    <string name="zerno_focus_reset">Centre</string>
-    <string name="zerno_focus_reset_description">Move the focus point back to the centre</string>
+    <string name="zerno_focus_hint">Double-tap to focus on the centre again</string>
+    <string name="zerno_trash_delete_short">Delete</string>
 </resources>

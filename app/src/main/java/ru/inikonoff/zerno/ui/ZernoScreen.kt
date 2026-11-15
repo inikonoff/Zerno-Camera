@@ -112,30 +112,20 @@ fun ZernoScreen(adapter: CameraAdapter) {
             }
         }
 
-        // a focus point chosen by touch: a button to move it back to the centre
-        // (a quick second tap on the preview does the same)
+        // the first time a focus point is chosen by touch: how to get back to the centre
         AnimatedVisibility(
-            visible = state.focusPointSet && state.greyCard == null,
+            visible = state.focusHint && state.greyCard == null,
             enter = fadeIn(), exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopStart).offset {
-                IntOffset(12.dp.roundToPx(), (if (state.previewTop > 0) state.previewTop else 0) + 12.dp.roundToPx())
+            modifier = Modifier.align(Alignment.TopCenter).offset {
+                IntOffset(0, (if (state.previewTop > 0) state.previewTop else 0) + 14.dp.roundToPx())
             },
         ) {
-            val description = stringResource(R.string.zerno_focus_reset_description)
-            Row(
-                Modifier
-                    .upright(state.uiRotation)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color(0x99000000))
-                    .semantics { contentDescription = description }
-                    .tap(onClick = adapter::resetFocusPoint)
-                    .padding(start = 10.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ZIcon(ZernoIcon.FOCUS_CENTRE, Color.White, Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Label(stringResource(R.string.zerno_focus_reset), size = 13.sp)
-            }
+            Label(
+                stringResource(R.string.zerno_focus_hint),
+                modifier = Modifier.upright(state.uiRotation).clip(RoundedCornerShape(50)).background(Color(0x80000000))
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
+                size = 13.sp,
+            )
         }
 
         // self-timer countdown, in the middle of the preview, upright however the phone is held
