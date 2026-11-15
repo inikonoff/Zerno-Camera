@@ -61,6 +61,7 @@ fun ShutterRow(
     exposureOpen: Boolean,
     focusOpen: Boolean,
     onExposure: () -> Unit,
+    onExposureReset: () -> Unit,
     onFocus: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -76,6 +77,7 @@ fun ShutterRow(
             description = stringResource(R.string.zerno_exposure),
             active = exposureOpen || state.pro.ev != 0,
             onClick = onExposure,
+            onDoubleClick = onExposureReset, // a double tap sets the compensation back to 0
         ) { tint ->
             if (state.pro.ev != 0) {
                 Label(Scales.formatEv(state.pro.ev, state.caps.evStep), Modifier.upright(state.uiRotation), color = tint, size = 12.sp, weight = FontWeight.Bold)
@@ -123,6 +125,7 @@ private fun SideButton(
     description: String,
     active: Boolean,
     onClick: () -> Unit,
+    onDoubleClick: (() -> Unit)? = null,
     content: @Composable (tint: Color) -> Unit,
 ) {
     Box(
@@ -132,7 +135,11 @@ private fun SideButton(
             .clip(CircleShape)
             .background(ZernoColors.Chip)
             .semantics { contentDescription = description }
-            .tap(enabled = visible, onClick = onClick),
+            .then(
+                if (!visible) Modifier
+                else if (onDoubleClick != null) Modifier.tapOrDouble(onDoubleTap = onDoubleClick, onTap = onClick)
+                else Modifier.tap(onClick = onClick)
+            ),
         contentAlignment = Alignment.Center,
     ) {
         content(if (active) ZernoColors.Accent else ZernoColors.OnPreview)

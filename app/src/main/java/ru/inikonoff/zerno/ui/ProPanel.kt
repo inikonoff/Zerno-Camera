@@ -97,7 +97,12 @@ fun ProPanel(
                 Column(
                     Modifier
                         .widthIn(min = 46.dp)
-                        .tap { onSelect(if (isOpen) null else param) }
+                        .then(
+                            if (param == ProParam.EV && !locked) {
+                                // a double tap on the compensation sets it back to 0
+                                Modifier.tapOrDouble(onDoubleTap = { adapter.setEv(0) }, onTap = { onSelect(if (isOpen) null else param) })
+                            } else Modifier.tap { onSelect(if (isOpen) null else param) }
+                        )
                         .padding(vertical = 5.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {

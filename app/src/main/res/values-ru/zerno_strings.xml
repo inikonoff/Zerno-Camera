@@ -94,7 +94,7 @@
     <string name="zerno_brightness">Яркость</string>
     <string name="zerno_contrast">Контраст</string>
     <string name="zerno_saturation">Насыщенность</string>
-    <string name="zerno_image_hint">Видно на превью и применяется к каждому снимку при сохранении. Файлы RAW не меняются.</string>
+    <string name="zerno_image_hint">Яркость, контраст и насыщенность видны на превью. Всё применяется к каждому снимку при сохранении; файлы RAW не меняются.</string>
     <string name="zerno_reset">Сбросить</string>
     <string name="zerno_shooting">Съёмка</string>
     <string name="zerno_qr_setting">Читать QR-коды</string>
@@ -177,4 +177,10 @@
     <string name="zerno_grey_failed">Не получилось замерить, попробуйте ещё раз</string>
     <string name="zerno_focus_hint">Двойной тап — фокус снова в центре</string>
     <string name="zerno_trash_delete_short">Удалить</string>
+    <string name="zerno_sharpness">Резкость</string>
+    <string name="zerno_detail_hint">Насколько сама камера сглаживает картинку и подчёркивает контуры. В режиме НОЧЬ не действует: там шум убирает склейка кадров. Цветной шум включается отдельно, на экране камеры.</string>
+    <string name="zerno_raw">Сохранять RAW (DNG) вместе с JPEG</string>
+    <string name="zerno_raw_hint">Кроме режимов НОЧЬ и HDR. Цветной шум, резкость и коррекция применяются только к JPEG.</string>
+    <string name="zerno_info_sharpness">Резкость</string>
+    <string name="zerno_info_raw">RAW</string>
 </resources>

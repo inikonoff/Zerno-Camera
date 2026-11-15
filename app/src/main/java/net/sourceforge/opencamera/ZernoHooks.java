@@ -123,6 +123,9 @@ public final class ZernoHooks {
      */
     public static volatile int chroma_denoise;
 
+    /** Sharpness applied to every saved photo: -5 (soft) to +5 (sharp); 0 = none. */
+    public static volatile int sharpness;
+
     /** Applies the colour noise removal and color_matrix to the photo. If there is nothing to
      *  do, returns the supplied bitmap (which may be null, meaning that the JPEG data is saved
      *  untouched). Works in place, in bands, so that no second full-size bitmap is needed.
@@ -130,7 +133,8 @@ public final class ZernoHooks {
     static Bitmap adjustImage(byte [] data, Bitmap bitmap) {
         final float [] matrix = color_matrix;
         final int chroma_level = chroma_denoise;
-        if( !ZERNO_UI || ( matrix == null && chroma_level <= 0 ) )
+        final int sharp_level = sharpness;
+        if( !ZERNO_UI || ( matrix == null && chroma_level <= 0 && sharp_level == 0 ) )
             return bitmap;
         try {
             if( bitmap == null ) {
@@ -162,6 +166,9 @@ public final class ZernoHooks {
                     }
                 });
             }
+            if( sharp_level != 0 ) {
+                sharpen(bitmap, sharp_level);
+            }
             if( matrix != null ) {
                 android.graphics.Paint paint = new android.graphics.Paint();
                 paint.setColorFilter(new android.graphics.ColorMatrixColorFilter(matrix));
@@ -181,6 +188,39 @@ public final class ZernoHooks {
             MyDebug.logStackTrace("ZernoHooks", "failed to adjust image", e);
         }
         return bitmap;
+    }
+
+    /** Sharpens or softens the bitmap in place (see ZernoSharpen), on several threads. Each band
+     *  is given the original rows just above and below it, saved beforehand, so that the result
+     *  doesn't depend on the order the bands are processed in.
+     */
+    private static void sharpen(final Bitmap bitmap, int level) {
+        final int width = bitmap.getWidth(), height = bitmap.getHeight();
+        final ZernoSharpen sharpen = new ZernoSharpen(width, height, level);
+        final int halo = sharpen.halo();
+        final int band_height = 128;
+        final int n_bands = (height + band_height - 1) / band_height;
+        final int [][] above = new int[n_bands][];
+        final int [][] below = new int[n_bands][];
+        for(int band=0;band<n_bands;band++) {
+            int y = band*band_height;
+            int rows = Math.min(band_height, height - y);
+            if( band > 0 ) {
+                above[band] = new int[width*halo];
+                bitmap.getPixels(above[band], 0, width, 0, y - halo, width, halo);
+            }
+            if( band < n_bands - 1 ) {
+                below[band] = new int[width*halo];
+                bitmap.getPixels(below[band], 0, width, 0, y + rows, width, halo);
+            }
+        }
+        runInBands(bitmap, band_height, true, new BandTask() {
+            @Override
+            public void run(int [] pixels, int y, int rows) {
+                int band = y / band_height;
+                sharpen.apply(pixels, rows, above[band], above[band] != null ? halo : 0, below[band], below[band] != null ? halo : 0);
+            }
+        });
     }
 
     private interface BandTask {

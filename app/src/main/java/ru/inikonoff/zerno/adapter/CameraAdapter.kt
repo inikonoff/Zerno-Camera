@@ -138,6 +138,8 @@ class CameraAdapter(private val activity: MainActivity) {
             contrast = prefs.getInt(KEY_CONTRAST, 0),
             saturation = prefs.getInt(KEY_SATURATION, 0),
             chromaDenoise = prefs.getInt(KEY_CHROMA, 0).coerceIn(0, Settings.CHROMA_MAX),
+            sharpness = prefs.getInt(KEY_SHARPNESS, 0).coerceIn(-Settings.ADJUST_RANGE, Settings.ADJUST_RANGE),
+            raw = prefs.getString(PreferenceKeys.RawPreferenceKey, "preference_raw_no") != "preference_raw_no",
             focusPeaking = prefs.getBoolean(KEY_PEAKING, true),
             qrEnabled = prefs.getBoolean(KEY_QR, true),
             shutterSound = prefs.getBoolean(PreferenceKeys.ShutterSoundPreferenceKey, true),
@@ -150,6 +152,7 @@ class CameraAdapter(private val activity: MainActivity) {
         applyMetering(settings.metering)
         applyImageAdjustment(settings)
         ZernoHooks.chroma_denoise = settings.chromaDenoise
+        ZernoHooks.sharpness = settings.sharpness
 
         _state.update {
             it.copy(
@@ -254,6 +257,7 @@ class CameraAdapter(private val activity: MainActivity) {
             wbPresets = wbPresets,
             wbKelvinValues = kelvins,
             customWb = kelvins.isNotEmpty(),
+            raw = preview.supportsRaw(),
             manualFocus = manualFocus,
             minFocusDistance = preview.minimumFocusDistance,
         )
@@ -517,6 +521,7 @@ class CameraAdapter(private val activity: MainActivity) {
         add("mode=${s.mode.name.lowercase()}")
         if (s.mode != Mode.NIGHT) add("detail=${s.detail.name.lowercase()}")
         add("chroma=${if (s.settings.chromaDenoise == 0) "off" else "${s.settings.chromaDenoise}/${Settings.CHROMA_MAX}"}")
+        if (s.settings.sharpness != 0) add("sharpness=%+d".format(s.settings.sharpness))
         if (s.mode == Mode.PHOTO && s.hdr != Hdr.OFF) add("hdr=${s.hdr.name.lowercase()}")
         if (s.settings.brightness != 0 || s.settings.contrast != 0 || s.settings.saturation != 0) {
             add("adjust=brightness %+d, contrast %+d, saturation %+d".format(s.settings.brightness, s.settings.contrast, s.settings.saturation))
@@ -644,6 +649,23 @@ class CameraAdapter(private val activity: MainActivity) {
         prefs.edit().putInt(KEY_CHROMA, value).apply()
         ZernoHooks.chroma_denoise = value
         _state.update { it.copy(settings = it.settings.copy(chromaDenoise = value)) }
+    }
+
+    /** Sharpness (-5..+5) is applied to each photo as it is saved (see ZernoSharpen). */
+    fun setSharpness(level: Int) {
+        val value = level.coerceIn(-Settings.ADJUST_RANGE, Settings.ADJUST_RANGE)
+        prefs.edit().putInt(KEY_SHARPNESS, value).apply()
+        ZernoHooks.sharpness = value
+        _state.update { it.copy(settings = it.settings.copy(sharpness = value)) }
+    }
+
+    /** Saves a RAW (DNG) file next to each JPEG. The camera is set up again, as RAW needs its
+     *  own image stream. (The engine doesn't save RAW in the Night and HDR modes.)
+     */
+    fun setRaw(on: Boolean) {
+        prefs.edit().putString(PreferenceKeys.RawPreferenceKey, if (on) "preference_raw_yes" else "preference_raw_no").apply()
+        _state.update { it.copy(settings = it.settings.copy(raw = on)) }
+        updateEngine()
     }
 
     fun setQrEnabled(on: Boolean) {
@@ -1356,6 +1378,7 @@ class CameraAdapter(private val activity: MainActivity) {
         private const val KEY_CONTRAST = "zerno_contrast"
         private const val KEY_SATURATION = "zerno_saturation"
         private const val KEY_QR = "zerno_qr"
+        private const val KEY_SHARPNESS = "zerno_sharpness"
         private const val KEY_FOCUS_HINT_SHOWN = "zerno_focus_hint_shown"
         private const val FOCUS_HINT_MS = 3500L
         private const val KEY_PRIORITY = "zerno_exposure_priority"

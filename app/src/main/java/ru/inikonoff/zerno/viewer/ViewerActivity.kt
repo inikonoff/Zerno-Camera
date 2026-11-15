@@ -31,6 +31,7 @@ import net.sourceforge.opencamera.R
  */
 class ViewerActivity : ComponentActivity() {
     private lateinit var repository: MediaRepository
+    private lateinit var folder: String
     private var trashMode = false
 
     private var items by mutableStateOf<List<MediaItem>>(emptyList())
@@ -49,8 +50,7 @@ class ViewerActivity : ComponentActivity() {
         // The photo turns with the phone, whatever the phone's own auto-rotate setting says
         // (the same way the camera app screen does), including upside down.
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
-        val folder = intent.getStringExtra(EXTRA_FOLDER)
-        if (folder == null) {
+        folder = intent.getStringExtra(EXTRA_FOLDER) ?: run {
             finish()
             return
         }
@@ -74,6 +74,7 @@ class ViewerActivity : ComponentActivity() {
                 onBrightness = ::applyBrightness,
                 onBack = ::finish,
                 onRemove = ::remove,
+                onOpenTrash = { start(this, folder, trash = true) },
                 onRestore = { item -> change(listOf(item)) { repository.setTrashed(it, false) } },
                 onDeleteForever = { item -> change(listOf(item)) { repository.delete(it) } },
                 onEmptyTrash = { change(items) { repository.delete(it) } },

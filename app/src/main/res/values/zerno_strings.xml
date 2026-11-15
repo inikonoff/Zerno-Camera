@@ -95,7 +95,7 @@
     <string name="zerno_brightness">Brightness</string>
     <string name="zerno_contrast">Contrast</string>
     <string name="zerno_saturation">Saturation</string>
-    <string name="zerno_image_hint">Shown on the preview and applied to each photo as it is saved. RAW files are not changed.</string>
+    <string name="zerno_image_hint">Brightness, contrast and saturation are shown on the preview. All are applied to each photo as it is saved; RAW files are not changed.</string>
     <string name="zerno_reset">Reset</string>
     <string name="zerno_shooting">Shooting</string>
     <string name="zerno_qr_setting">Read QR codes</string>
@@ -178,4 +178,10 @@
     <string name="zerno_grey_failed">Couldn\'t measure, try again</string>
     <string name="zerno_focus_hint">Double-tap to focus on the centre again</string>
     <string name="zerno_trash_delete_short">Delete</string>
+    <string name="zerno_sharpness">Sharpness</string>
+    <string name="zerno_detail_hint">How much the camera itself smooths the picture and sharpens edges. Doesn\'t apply in the Night mode, which removes noise by combining frames. Colour noise has its own switch on the camera screen.</string>
+    <string name="zerno_raw">Save RAW (DNG) with JPEG</string>
+    <string name="zerno_raw_hint">Not in the Night and HDR modes. Colour noise, sharpness and adjustments are applied to the JPEG only.</string>
+    <string name="zerno_info_sharpness">Sharpness</string>
+    <string name="zerno_info_raw">RAW</string>
 </resources>

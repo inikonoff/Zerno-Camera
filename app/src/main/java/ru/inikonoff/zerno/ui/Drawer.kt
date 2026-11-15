@@ -74,12 +74,10 @@ private enum class DrawerItem { DETAIL, HDR, RATIO, TIMER }
 @Composable
 fun Drawer(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifier) {
     var chooser by remember { mutableStateOf<DrawerItem?>(null) }
-    val showDetail = state.mode != Mode.NIGHT && state.caps.details.size > 1
     val showHdr = state.mode == Mode.PHOTO && state.caps.hdrs.size > 1
     val showRatio = state.caps.ratios.isNotEmpty()
     val open = chooser.takeIf {
         when (it) {
-            DrawerItem.DETAIL -> showDetail
             DrawerItem.HDR -> showHdr
             DrawerItem.RATIO -> showRatio
             else -> true
@@ -93,10 +91,9 @@ fun Drawer(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifier
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.Top,
             ) {
-                if (showDetail) {
-                    DrawerButton(stringResource(R.string.zerno_detail), state.detail != Detail.STANDARD, { chooser = DrawerItem.DETAIL }) {
-                        ZIcon(ZernoIcon.DETAIL, it, Modifier.size(22.dp).upright(state.uiRotation))
-                    }
+                // colour noise removal (the camera's own noise reduction, "Detail", is in the settings)
+                DrawerButton(stringResource(R.string.zerno_chroma), state.settings.chromaDenoise != 0, { chooser = DrawerItem.DETAIL }) {
+                    ZIcon(ZernoIcon.DETAIL, it, Modifier.size(22.dp).upright(state.uiRotation))
                 }
                 if (showHdr) {
                     DrawerButton(stringResource(R.string.zerno_hdr), state.hdr != Hdr.OFF, { chooser = DrawerItem.HDR }) {
@@ -118,20 +115,16 @@ fun Drawer(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifier
                 }
             }
             DrawerItem.DETAIL -> ChoiceRow(
-                title = stringResource(R.string.zerno_detail),
-                options = state.caps.details.map {
-                    it to stringResource(
-                        when (it) {
-                            Detail.OFF -> R.string.zerno_detail_off
-                            Detail.MINIMAL -> R.string.zerno_detail_minimal
-                            Detail.FAST -> R.string.zerno_detail_fast
-                            Detail.STANDARD -> R.string.zerno_detail_standard
-                        }
-                    )
-                },
-                selected = state.detail,
+                title = stringResource(R.string.zerno_chroma),
+                options = listOf(
+                    0 to stringResource(R.string.zerno_chroma_off),
+                    1 to stringResource(R.string.zerno_chroma_light),
+                    2 to stringResource(R.string.zerno_chroma_medium),
+                    3 to stringResource(R.string.zerno_chroma_strong),
+                ),
+                selected = state.settings.chromaDenoise,
                 onClose = { chooser = null },
-            ) { adapter.setDetail(it); chooser = null }
+            ) { adapter.setChromaDenoise(it); chooser = null }
             DrawerItem.HDR -> ChoiceRow(
                 title = stringResource(R.string.zerno_hdr),
                 options = state.caps.hdrs.map {

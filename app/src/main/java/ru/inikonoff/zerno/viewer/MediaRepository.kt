@@ -28,7 +28,13 @@ data class MediaItem(
     val sizeBytes: Long,
     val width: Int,
     val height: Int,
-)
+    /** RAW (DNG) files saved with this photo; they follow it when it is trashed or deleted. */
+    val companions: List<MediaItem> = emptyList(),
+) {
+    val isRaw: Boolean get() = name.endsWith(".dng", ignoreCase = true)
+}
+
+private fun List<MediaItem>.withCompanions(): List<MediaItem> = flatMap { listOf(it) + it.companions }
 
 /** The outcome of moving photos to/from the trash or deleting them. */
 sealed interface ChangeResult {
@@ -111,7 +117,19 @@ class MediaRepository(private val context: Context, folderPath: String) {
         } catch (e: RuntimeException) {
             // no access: show nothing
         }
+        return pairWithRaw(items)
+    }
+
+    /** A RAW file saved next to a photo of the same name isn't listed on its own: it belongs to
+     *  the photo.
+     */
+    private fun pairWithRaw(items: List<MediaItem>): List<MediaItem> {
+        fun base(name: String) = name.substringBeforeLast('.')
+        val photoBases = items.filter { !it.isRaw }.map { base(it.name) }.toSet()
+        val rawByBase = items.filter { it.isRaw }.groupBy { base(it.name) }
         return items
+            .filter { !it.isRaw || base(it.name) !in photoBases }
+            .map { if (it.isRaw) it else it.copy(companions = rawByBase[base(it.name)].orEmpty()) }
     }
 
     /** Trashed files are renamed ".trashed-<expiry time>-<original name>". */
@@ -123,10 +141,10 @@ class MediaRepository(private val context: Context, folderPath: String) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return ChangeResult.Failed
         return try {
             val values = ContentValues().apply { put(MediaStore.MediaColumns.IS_TRASHED, if (trashed) 1 else 0) }
-            for (item in items) resolver.update(item.uri, values, null, null)
+            for (item in items.withCompanions()) resolver.update(item.uri, values, null, null)
             ChangeResult.Done
         } catch (e: SecurityException) {
-            consent { MediaStore.createTrashRequest(resolver, items.map { it.uri }, trashed).intentSender }
+            consent { MediaStore.createTrashRequest(resolver, items.withCompanions().map { it.uri }, trashed).intentSender }
         } catch (e: RuntimeException) {
             ChangeResult.Failed
         }
@@ -135,11 +153,11 @@ class MediaRepository(private val context: Context, folderPath: String) {
     /** Deletes photos for good. */
     fun delete(items: List<MediaItem>): ChangeResult {
         return try {
-            for (item in items) resolver.delete(item.uri, null, null)
+            for (item in items.withCompanions()) resolver.delete(item.uri, null, null)
             ChangeResult.Done
         } catch (e: SecurityException) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                consent { MediaStore.createDeleteRequest(resolver, items.map { it.uri }).intentSender }
+                consent { MediaStore.createDeleteRequest(resolver, items.withCompanions().map { it.uri }).intentSender }
             } else ChangeResult.Failed
         } catch (e: RuntimeException) {
             ChangeResult.Failed
@@ -201,6 +219,7 @@ class MediaRepository(private val context: Context, folderPath: String) {
             if (!value.isNullOrBlank()) lines.add(InfoLine(label, value.trim()))
         }
         add(R.string.zerno_info_file, item.name)
+        if (item.companions.isNotEmpty()) add(R.string.zerno_info_raw, "DNG")
         add(R.string.zerno_info_date, SimpleDateFormat("d MMMM yyyy, HH:mm:ss", Locale.getDefault()).format(Date(item.dateMs)))
         try {
             resolver.openInputStream(item.uri)?.use { stream ->
@@ -251,6 +270,7 @@ class MediaRepository(private val context: Context, folderPath: String) {
             "mode" to R.string.zerno_info_mode,
             "detail" to R.string.zerno_info_detail,
             "chroma" to R.string.zerno_info_chroma,
+            "sharpness" to R.string.zerno_info_sharpness,
             "hdr" to R.string.zerno_info_hdr,
             "shadows" to R.string.zerno_info_shadows,
             "highlights" to R.string.zerno_info_highlights,

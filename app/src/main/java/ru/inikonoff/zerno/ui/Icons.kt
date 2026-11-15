@@ -22,7 +22,7 @@ import kotlin.math.sin
 enum class ZernoIcon {
     DETAIL, HDR, GRID, LEVEL, TIMER, SETTINGS, SWITCH_CAMERA, GALLERY,
     FLASH_OFF, FLASH_AUTO, FLASH_ON, TORCH, EXPOSURE, QR, COPY, EYE, CLOSE, BACK, INFO,
-    METERING_SPOT, METERING_CENTRE, METERING_MATRIX, GREY_CARD, FOCUS_CENTRE, MOUNTAINS, FLOWER,
+    METERING_SPOT, METERING_CENTRE, METERING_MATRIX, GREY_CARD, FOCUS_CENTRE, MOUNTAINS, FLOWER, TRASH,
 }
 
 @Composable
@@ -156,6 +156,17 @@ fun ZIcon(icon: ZernoIcon, tint: Color, modifier: Modifier = Modifier) {
                         drawCircle(tint, 1.2f * u, p(12f, 12f))
                     }
                 }
+            }
+            ZernoIcon.TRASH -> {
+                line(4f, 6.5f, 20f, 6.5f)
+                line(9.5f, 6.5f, 9.5f, 4.5f); line(9.5f, 4.5f, 14.5f, 4.5f); line(14.5f, 4.5f, 14.5f, 6.5f)
+                val bin = Path().apply {
+                    moveTo(6f * u, 6.5f * u); lineTo(7f * u, 19f * u)
+                    quadraticTo(7.1f * u, 20.5f * u, 8.6f * u, 20.5f * u); lineTo(15.4f * u, 20.5f * u)
+                    quadraticTo(16.9f * u, 20.5f * u, 17f * u, 19f * u); lineTo(18f * u, 6.5f * u)
+                }
+                drawPath(bin, tint, style = stroke)
+                line(10f, 10.5f, 10.3f, 17f); line(14f, 10.5f, 13.7f, 17f)
             }
             ZernoIcon.MOUNTAINS -> {
                 val ridge = Path().apply {

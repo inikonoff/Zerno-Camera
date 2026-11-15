@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import net.sourceforge.opencamera.BuildConfig
 import net.sourceforge.opencamera.R
 import ru.inikonoff.zerno.adapter.CameraAdapter
+import ru.inikonoff.zerno.adapter.Detail
 import ru.inikonoff.zerno.adapter.Metering
 import ru.inikonoff.zerno.adapter.Settings
 import ru.inikonoff.zerno.adapter.UiState
@@ -114,18 +115,22 @@ fun SettingsScreen(state: UiState, adapter: CameraAdapter) {
                 )
             }
 
-            Section(stringResource(R.string.zerno_chroma)) {
+            Section(stringResource(R.string.zerno_detail)) {
                 Segmented(
-                    options = listOf(
-                        0 to stringResource(R.string.zerno_chroma_off),
-                        1 to stringResource(R.string.zerno_chroma_light),
-                        2 to stringResource(R.string.zerno_chroma_medium),
-                        3 to stringResource(R.string.zerno_chroma_strong),
-                    ),
-                    selected = settings.chromaDenoise,
-                    onSelect = adapter::setChromaDenoise,
+                    options = state.caps.details.map {
+                        it to stringResource(
+                            when (it) {
+                                Detail.OFF -> R.string.zerno_detail_off
+                                Detail.MINIMAL -> R.string.zerno_detail_minimal
+                                Detail.FAST -> R.string.zerno_detail_fast
+                                Detail.STANDARD -> R.string.zerno_detail_standard
+                            }
+                        )
+                    },
+                    selected = state.detail,
+                    onSelect = adapter::setDetail,
                 )
-                BasicText(stringResource(R.string.zerno_chroma_hint), modifier = Modifier.padding(top = 10.dp), style = Hint)
+                BasicText(stringResource(R.string.zerno_detail_hint), modifier = Modifier.padding(top = 10.dp), style = Hint)
             }
 
             Section(stringResource(R.string.zerno_image)) {
@@ -138,11 +143,12 @@ fun SettingsScreen(state: UiState, adapter: CameraAdapter) {
                 Adjustment(stringResource(R.string.zerno_saturation), settings.saturation) {
                     adapter.setImageAdjustment(settings.brightness, settings.contrast, it)
                 }
+                Adjustment(stringResource(R.string.zerno_sharpness), settings.sharpness, adapter::setSharpness)
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     BasicText(stringResource(R.string.zerno_image_hint), modifier = Modifier.weight(1f), style = Hint)
-                    if (settings.brightness != 0 || settings.contrast != 0 || settings.saturation != 0) {
+                    if (settings.brightness != 0 || settings.contrast != 0 || settings.saturation != 0 || settings.sharpness != 0) {
                         Spacer(Modifier.width(10.dp))
-                        Pill(stringResource(R.string.zerno_reset), selected = false) { adapter.setImageAdjustment(0, 0, 0) }
+                        Pill(stringResource(R.string.zerno_reset), selected = false) { adapter.setImageAdjustment(0, 0, 0); adapter.setSharpness(0) }
                     }
                 }
             }
@@ -152,6 +158,10 @@ fun SettingsScreen(state: UiState, adapter: CameraAdapter) {
                 ToggleRow(stringResource(R.string.zerno_shutter_sound), settings.shutterSound, adapter::setShutterSound)
                 ToggleRow(stringResource(R.string.zerno_mirror_front), settings.mirrorFront, adapter::setMirrorFront)
                 ToggleRow(stringResource(R.string.zerno_geotag), settings.geotag, adapter::setGeotag)
+                if (state.caps.raw) {
+                    ToggleRow(stringResource(R.string.zerno_raw), settings.raw, adapter::setRaw)
+                    BasicText(stringResource(R.string.zerno_raw_hint), modifier = Modifier.padding(bottom = 6.dp), style = Hint)
+                }
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     BasicText(stringResource(R.string.zerno_jpeg_quality), modifier = Modifier.weight(1f), style = Title)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

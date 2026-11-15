@@ -104,6 +104,7 @@ fun ViewerScreen(
     onBrightness: (Float) -> Unit,
     onBack: () -> Unit,
     onRemove: (MediaItem) -> Unit,
+    onOpenTrash: () -> Unit,
     onRestore: (MediaItem) -> Unit,
     onDeleteForever: (MediaItem) -> Unit,
     onEmptyTrash: () -> Unit,
@@ -177,10 +178,14 @@ fun ViewerScreen(
                         modifier = Modifier.align(Alignment.Center),
                         style = White.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
                     )
-                    BarButton(
-                        ZernoIcon.INFO, stringResource(R.string.zerno_viewer_info), if (info) ZernoColors.Accent else Color.White,
-                        Modifier.align(Alignment.CenterEnd),
-                    ) { info = !info }
+                    Row(Modifier.align(Alignment.CenterEnd)) {
+                        if (!trashMode && hasTrash) {
+                            BarButton(ZernoIcon.TRASH, stringResource(R.string.zerno_trash), onOpenTrash)
+                        }
+                        BarButton(
+                            ZernoIcon.INFO, stringResource(R.string.zerno_viewer_info), if (info) ZernoColors.Accent else Color.White,
+                        ) { info = !info }
+                    }
                 }
             }
         }

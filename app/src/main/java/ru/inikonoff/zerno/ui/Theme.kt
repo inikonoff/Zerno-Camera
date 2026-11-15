@@ -5,6 +5,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.role
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -65,6 +70,16 @@ fun Modifier.tap(enabled: Boolean = true, role: Role = Role.Button, onClick: () 
         role = role,
         onClick = onClick,
     )
+
+/** A tap, and a double tap (which waits a moment to tell the two apart). */
+@Composable
+fun Modifier.tapOrDouble(role: Role = Role.Button, onDoubleTap: () -> Unit, onTap: () -> Unit): Modifier {
+    val currentTap = rememberUpdatedState(onTap)
+    val currentDouble = rememberUpdatedState(onDoubleTap)
+    return this.pointerInput(Unit) {
+        detectTapGestures(onTap = { currentTap.value() }, onDoubleTap = { currentDouble.value() })
+    }.semantics { this.role = role }
+}
 
 /** Rotates content to stay upright as the (portrait locked) device is turned, always taking the
  *  shortest way round.

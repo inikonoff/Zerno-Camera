@@ -27,6 +27,10 @@ data class Settings(
     val brightness: Int = 0,
     val contrast: Int = 0,
     val saturation: Int = 0,
+    /** Sharpness: -5 (soft) to +5 (sharp). */
+    val sharpness: Int = 0,
+    /** Save a RAW (DNG) file next to each JPEG, if the camera can. */
+    val raw: Boolean = false,
     /** Colour noise removal: 0 (off) to [CHROMA_MAX]. */
     val chromaDenoise: Int = 0,
     val qrEnabled: Boolean = true,
@@ -96,6 +100,8 @@ data class Capabilities(
     val wbKelvinValues: List<Int> = emptyList(), // empty if manual temperature isn't supported
     /** White balance can be measured from a grey card (needs manual white balance). */
     val customWb: Boolean = false,
+    /** The camera can deliver RAW (DNG). */
+    val raw: Boolean = false,
     val manualFocus: Boolean = false,
     val minFocusDistance: Float = 0f, // in dioptres (1/metres); 0 means infinity
 ) {

@@ -177,6 +177,7 @@ fun ZernoScreen(adapter: CameraAdapter) {
                     val target = if (state.mode == Mode.PRO) Panel.Pro(ProParam.EV) else Panel.Exposure
                     panel = if (effectivePanel == target) null else target
                 },
+                onExposureReset = { adapter.setEv(0) },
                 onFocus = { panel = if (effectivePanel == Panel.Focus) null else Panel.Focus },
             )
             Spacer(Modifier.height(14.dp))
