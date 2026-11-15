@@ -217,7 +217,7 @@ fun ViewerScreen(
         when (val c = confirm) {
             null -> {}
             is Confirm.Delete -> ConfirmDialog(
-                stringResource(R.string.zerno_confirm_delete), stringResource(R.string.zerno_trash_delete),
+                stringResource(R.string.zerno_confirm_delete), stringResource(R.string.zerno_trash_delete_short),
                 onConfirm = { confirm = null; onDeleteForever(c.item) }, onDismiss = { confirm = null },
             )
             Confirm.EmptyTrash -> ConfirmDialog(
@@ -496,9 +496,10 @@ private fun ConfirmDialog(text: String, confirmLabel: String, onConfirm: () -> U
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             BasicText(text, style = White.copy(fontSize = 16.sp, lineHeight = 22.sp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
-                TextButton(stringResource(R.string.zerno_cancel), primary = false, onClick = onDismiss)
-                TextButton(confirmLabel, primary = true, onClick = onConfirm)
+            // two buttons of the same width
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TextButton(stringResource(R.string.zerno_cancel), primary = false, Modifier.weight(1f), onClick = onDismiss)
+                TextButton(confirmLabel, primary = true, Modifier.weight(1f), onClick = onConfirm)
             }
         }
     }
