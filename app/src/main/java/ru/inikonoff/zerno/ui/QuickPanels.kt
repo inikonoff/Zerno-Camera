@@ -74,9 +74,11 @@ fun FocusPanel(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modi
         }
         if (state.focusMode == Focus.MANUAL && caps.manualFocus) {
             DrumRuler(
-                labels = (0..Scales.FOCUS_STEPS).map { Scales.formatFocus(Scales.focusDistanceAt(it, caps.minFocusDistance)) },
+                // only tick marks: the distances the camera reports for manual focus are not reliable
+                labels = (0..Scales.FOCUS_STEPS).map { "" },
                 selectedIndex = Scales.focusIndexOf(state.pro.focusDistance, caps.minFocusDistance),
                 onSelect = { adapter.setFocusDistance(Scales.focusDistanceAt(it, caps.minFocusDistance)) },
+                ticks = true,
             )
         }
     }

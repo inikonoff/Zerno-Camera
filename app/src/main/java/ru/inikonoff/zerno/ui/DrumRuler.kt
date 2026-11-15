@@ -41,8 +41,12 @@ fun DrumRuler(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    /** Draw tick marks instead of labels (like the zoom dial). An empty label is a tick; any
+     *  other label (e.g. "A" for automatic) is drawn as text. Ticks are packed closer.
+     */
+    ticks: Boolean = false,
 ) {
-    val itemWidth = 60.dp
+    val itemWidth = if (ticks) 20.dp else 60.dp
     BoxWithConstraints(modifier.fillMaxWidth().height(52.dp)) {
         val itemPx = with(LocalDensity.current) { itemWidth.toPx() }
         val sidePadding = (maxWidth - itemWidth) / 2
@@ -89,13 +93,31 @@ fun DrumRuler(
                     },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Label(
-                        labels[i],
-                        modifier = Modifier.padding(bottom = 10.dp),
-                        color = if (isCentre) ZernoColors.Accent else ZernoColors.Dim,
-                        size = if (isCentre) 15.sp else 13.sp,
-                        weight = if (isCentre) FontWeight.Bold else FontWeight.Medium,
-                    )
+                    if (ticks && labels[i].isEmpty()) {
+                        // every fifth tick is longer, every tenth longer still
+                        val length = when {
+                            (i - 1) % 10 == 0 -> 22.dp
+                            (i - 1) % 5 == 0 -> 16.dp
+                            else -> 10.dp
+                        }
+                        Canvas(Modifier.fillMaxSize()) {
+                            val x = size.width / 2f
+                            val bottom = size.height - 14.dp.toPx()
+                            drawLine(
+                                if (isCentre) ZernoColors.Accent else ZernoColors.OnPreview.copy(alpha = 0.75f),
+                                Offset(x, bottom), Offset(x, bottom - length.toPx()),
+                                strokeWidth = (if (isCentre) 2.5.dp else 1.5.dp).toPx(), cap = StrokeCap.Round,
+                            )
+                        }
+                    } else {
+                        Label(
+                            labels[i],
+                            modifier = Modifier.padding(bottom = 10.dp),
+                            color = if (isCentre) ZernoColors.Accent else ZernoColors.Dim,
+                            size = if (isCentre) 15.sp else 13.sp,
+                            weight = if (isCentre) FontWeight.Bold else FontWeight.Medium,
+                        )
+                    }
                 }
             }
         }

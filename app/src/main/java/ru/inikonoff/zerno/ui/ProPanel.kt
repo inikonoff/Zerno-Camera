@@ -85,7 +85,7 @@ fun ProPanel(
                     ProParam.S -> if (pro.shutterAuto) autoShort + (if (pro.liveShutterNs > 0) " ${Scales.formatShutter(pro.liveShutterNs)}" else "") else Scales.formatShutter(pro.shutterNs)
                     ProParam.EV -> Scales.formatEv(pro.ev, caps.evStep)
                     ProParam.WB -> if (pro.customWb) stringResource(R.string.zerno_wb_card_short) else if (pro.wb == "manual") "${pro.kelvin}K" else wbName(pro.wb)
-                    ProParam.MF -> if (pro.focusAuto) "AF" else Scales.formatFocus(pro.focusDistance)
+                    ProParam.MF -> if (pro.focusAuto) "AF" else "MF"
                 }
                 val locked = param == ProParam.EV && pro.evLocked
                 val isOpen = param == open
@@ -162,9 +162,11 @@ fun ProPanel(
                 }
             }
             ProParam.MF -> DrumRuler(
-                labels = listOf(auto) + (0..Scales.FOCUS_STEPS).map { Scales.formatFocus(Scales.focusDistanceAt(it, caps.minFocusDistance)) },
+                // only tick marks: the distances the camera reports for manual focus are not reliable
+                labels = listOf(autoShort) + (0..Scales.FOCUS_STEPS).map { "" },
                 selectedIndex = if (pro.focusAuto) 0 else 1 + Scales.focusIndexOf(pro.focusDistance, caps.minFocusDistance),
                 onSelect = { adapter.setFocusDistance(if (it == 0) null else Scales.focusDistanceAt(it - 1, caps.minFocusDistance)) },
+                ticks = true,
             )
         }
     }
