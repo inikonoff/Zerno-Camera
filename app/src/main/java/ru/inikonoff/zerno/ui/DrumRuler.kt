@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
@@ -52,7 +53,7 @@ fun DrumRuler(
     startIcon: ZernoIcon? = null,
     endIcon: ZernoIcon? = null,
 ) {
-    val itemWidth = if (ticks) 20.dp else 60.dp
+    val itemWidth = if (ticks) 7.dp else 60.dp
     BoxWithConstraints(modifier.fillMaxWidth().height(if (ticks) 64.dp else 52.dp)) {
         val itemPx = with(LocalDensity.current) { itemWidth.toPx() }
         val sidePadding = (maxWidth - itemWidth) / 2
@@ -116,7 +117,7 @@ fun DrumRuler(
                         if (icon != null) {
                             ZIcon(
                                 icon, if (isCentre) ZernoColors.Accent else ZernoColors.OnPreview,
-                                Modifier.align(Alignment.TopCenter).padding(top = 2.dp).size(20.dp),
+                                Modifier.align(Alignment.TopCenter).padding(top = 2.dp).requiredSize(20.dp), // wider than its narrow cell
                             )
                         }
                         Canvas(Modifier.fillMaxSize()) {
@@ -125,7 +126,7 @@ fun DrumRuler(
                             drawLine(
                                 if (isCentre) ZernoColors.Accent else ZernoColors.OnPreview.copy(alpha = 0.75f),
                                 Offset(x, bottom), Offset(x, bottom - length.toPx()),
-                                strokeWidth = (if (isCentre) 2.5.dp else 1.5.dp).toPx(), cap = StrokeCap.Round,
+                                strokeWidth = (if (isCentre) 1.8.dp else 1.dp).toPx(), cap = StrokeCap.Round,
                             )
                         }
                     } else {
