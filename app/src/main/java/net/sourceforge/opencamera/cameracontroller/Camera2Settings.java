@@ -330,7 +330,11 @@ public class Camera2Settings {
                     Log.d(TAG, "default_color_correction: " + default_color_correction);
             }
 
-            RggbChannelVector rggbChannelVector = CameraController2.convertTemperatureToRggbVector(white_balance_temperature);
+            // Zerno: white balance measured from a grey card, if set
+            final float [] zerno_gains = net.sourceforge.opencamera.ZernoHooks.custom_wb_gains;
+            RggbChannelVector rggbChannelVector = zerno_gains != null ?
+                    new RggbChannelVector(zerno_gains[0], zerno_gains[1], zerno_gains[2], zerno_gains[3]) :
+                    CameraController2.convertTemperatureToRggbVector(white_balance_temperature);
             builder.set(CaptureRequest.COLOR_CORRECTION_MODE, CameraMetadata.COLOR_CORRECTION_MODE_TRANSFORM_MATRIX);
             builder.set(CaptureRequest.COLOR_CORRECTION_GAINS, rggbChannelVector);
             if( MyDebug.LOG ) {

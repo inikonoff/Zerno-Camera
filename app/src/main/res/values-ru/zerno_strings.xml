@@ -26,7 +26,7 @@
 
     <string name="zerno_auto">АВТО</string>
     <string name="zerno_auto_short">A</string>
-    <string name="zerno_ev_locked">EV недоступна, пока ISO или выдержка заданы вручную</string>
+    <string name="zerno_ev_locked">EV недоступна, когда и ISO, и выдержка заданы вручную</string>
     <string name="zerno_wb_auto">Авто</string>
     <string name="zerno_wb_daylight">Солнце</string>
     <string name="zerno_wb_cloudy">Облачно</string>
@@ -167,4 +167,12 @@
     <string name="zerno_assist_peaking">Подсветка резких контуров при ручном фокусе</string>
     <string name="zerno_assist_zebra">Зебра на пересвеченных участках</string>
     <string name="zerno_assist_hint">Оба постоянно анализируют превью и на небыстрых телефонах могут сделать его менее плавным.</string>
+    <string name="zerno_wb_card">Серая карта</string>
+    <string name="zerno_wb_card_short">Карта</string>
+    <string name="zerno_grey_aim">Заполните квадрат серой картой при том свете, в котором снимаете</string>
+    <string name="zerno_grey_measuring">Замер… держите неподвижно</string>
+    <string name="zerno_grey_measure">Замерить</string>
+    <string name="zerno_grey_too_dark">Слишком темно: добавьте света или возьмите карту светлее</string>
+    <string name="zerno_grey_too_bright">Слишком светло: карта пересвечена</string>
+    <string name="zerno_grey_failed">Не получилось замерить, попробуйте ещё раз</string>
 </resources>

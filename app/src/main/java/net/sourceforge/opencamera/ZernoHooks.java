@@ -62,6 +62,54 @@ public final class ZernoHooks {
         }
     }
 
+    // ---- ISO / shutter priority ----
+
+    /** While ISO or shutter priority is in use, the preview runs on the camera's auto exposure,
+     *  and the adapter works out the manual ISO and exposure time to take the photo with. 0 = no
+     *  override (take the photo as the preview is set up).
+     */
+    public static volatile int still_iso;
+    public static volatile long still_exposure_time;
+
+    /** Called with the request for a single photo, just before it is sent to the camera. */
+    public static void applyStillOverride(android.hardware.camera2.CaptureRequest.Builder builder) {
+        final int iso = still_iso;
+        final long exposure_time = still_exposure_time;
+        if( !ZERNO_UI || iso <= 0 || exposure_time <= 0 )
+            return;
+        builder.set(android.hardware.camera2.CaptureRequest.CONTROL_AE_MODE, android.hardware.camera2.CameraMetadata.CONTROL_AE_MODE_OFF);
+        builder.set(android.hardware.camera2.CaptureRequest.SENSOR_SENSITIVITY, iso);
+        builder.set(android.hardware.camera2.CaptureRequest.SENSOR_EXPOSURE_TIME, exposure_time);
+        if( android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O ) {
+            // zero shutter lag would hand back a frame from before the press, taken with the preview's exposure
+            builder.set(android.hardware.camera2.CaptureRequest.CONTROL_ENABLE_ZSL, false);
+        }
+    }
+
+    // ---- white balance ----
+
+    /** White balance gains (R, G_even, G_odd, B) measured from a grey card, used while the white
+     *  balance is "manual"; null to use the colour temperature instead.
+     */
+    public static volatile float [] custom_wb_gains;
+
+    /** The white balance gains of the latest preview frame. */
+    public static volatile float [] last_wb_gains;
+
+    /** Called (on a camera thread) for each capture result. */
+    public static void captureResult(android.hardware.camera2.CaptureResult result) {
+        if( !ZERNO_UI )
+            return;
+        try {
+            android.hardware.camera2.params.RggbChannelVector gains = result.get(android.hardware.camera2.CaptureResult.COLOR_CORRECTION_GAINS);
+            if( gains != null )
+                last_wb_gains = new float[]{gains.getRed(), gains.getGreenEven(), gains.getGreenOdd(), gains.getBlue()};
+        }
+        catch(RuntimeException e) {
+            // not reported by this camera
+        }
+    }
+
     // ---- image adjustment ----
 
     /** A 4x5 colour matrix (as used by android.graphics.ColorMatrix) applied to every saved

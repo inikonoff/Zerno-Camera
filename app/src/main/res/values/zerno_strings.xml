@@ -27,7 +27,7 @@
 
     <string name="zerno_auto">AUTO</string>
     <string name="zerno_auto_short">A</string>
-    <string name="zerno_ev_locked">EV is locked while ISO or shutter speed is manual</string>
+    <string name="zerno_ev_locked">EV is locked while both ISO and shutter speed are manual</string>
     <string name="zerno_wb_auto">Auto</string>
     <string name="zerno_wb_daylight">Sun</string>
     <string name="zerno_wb_cloudy">Cloudy</string>
@@ -168,4 +168,12 @@
     <string name="zerno_assist_peaking">Highlight sharp edges in manual focus</string>
     <string name="zerno_assist_zebra">Zebra stripes on overexposed areas</string>
     <string name="zerno_assist_hint">Both analyse the preview continuously and can make it less smooth on slower phones.</string>
+    <string name="zerno_wb_card">Grey card</string>
+    <string name="zerno_wb_card_short">Card</string>
+    <string name="zerno_grey_aim">Fill the square with a grey card, in the light you are shooting in</string>
+    <string name="zerno_grey_measuring">Measuring… hold still</string>
+    <string name="zerno_grey_measure">Measure</string>
+    <string name="zerno_grey_too_dark">Too dark: add light or point at a brighter grey</string>
+    <string name="zerno_grey_too_bright">Too bright: the card is overexposed</string>
+    <string name="zerno_grey_failed">Couldn\'t measure, try again</string>
 </resources>

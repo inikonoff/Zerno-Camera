@@ -94,14 +94,31 @@ data class Capabilities(
     val evStep: Float = 0f,
     val wbPresets: List<String> = emptyList(), // engine white balance values, "auto" first
     val wbKelvinValues: List<Int> = emptyList(), // empty if manual temperature isn't supported
+    /** White balance can be measured from a grey card (needs manual white balance). */
+    val customWb: Boolean = false,
     val manualFocus: Boolean = false,
     val minFocusDistance: Float = 0f, // in dioptres (1/metres); 0 means infinity
 ) {
     val hasEv: Boolean get() = evMin != 0 || evMax != 0
 }
 
+/** How the exposure is set in Pro: like the P / Sv / S / M modes of a camera, with ISO taking
+ *  the place of the aperture.
+ */
+enum class ExposureMode { AUTO, ISO_PRIORITY, SHUTTER_PRIORITY, MANUAL }
+
+/** The grey-card white balance measurement, while it is on screen. */
+data class GreyCardState(
+    val measuring: Boolean = false,
+    /** A message about the last attempt (a string resource), if any. */
+    val message: Int? = null,
+    /** A measurement from before is in use, so "cancel" keeps it. */
+    val hasMeasurement: Boolean = false,
+)
+
 /** Manual parameters of the "Pro" panel. */
 data class ProState(
+    val exposureMode: ExposureMode = ExposureMode.AUTO,
     val isoAuto: Boolean = true,
     val iso: Int = 0,
     val shutterAuto: Boolean = true,
@@ -109,14 +126,16 @@ data class ProState(
     val ev: Int = 0,
     val wb: String = "auto",
     val kelvin: Int = 5000,
+    /** The white balance comes from a grey-card measurement. */
+    val customWb: Boolean = false,
     val focusAuto: Boolean = true,
     val focusDistance: Float = 0f,
-    // what the camera's auto exposure is currently using, if known (0 if unknown)
+    // the values that the automatic part of the exposure is currently choosing, if known (0 if unknown)
     val liveIso: Int = 0,
     val liveShutterNs: Long = 0L,
 ) {
-    /** Exposure compensation only works while the exposure is automatic. */
-    val evLocked: Boolean get() = !isoAuto || !shutterAuto
+    /** Exposure compensation works while at least one of ISO and shutter speed is automatic. */
+    val evLocked: Boolean get() = !isoAuto && !shutterAuto
 }
 
 data class UiState(
@@ -152,6 +171,7 @@ data class UiState(
     val zernoSettingsOpen: Boolean = false,
     /** The stack trace of the crash that ended the previous run, if it hasn't been dismissed. */
     val crashReport: String? = null,
+    val greyCard: GreyCardState? = null,
     /** The diagnostics report, while it is being shown. */
     val diagnostics: String? = null,
     /** Vertical extent of the camera preview within the window, in pixels (0 if not yet known). */

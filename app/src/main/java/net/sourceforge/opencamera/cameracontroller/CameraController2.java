@@ -4930,6 +4930,21 @@ public class CameraController2 extends CameraController {
         return has_focus;
     }
     
+    /** Zerno: re-applies the white balance to the running preview (used when the grey-card
+     *  gains in ZernoHooks.custom_wb_gains change).
+     */
+    public void zernoReapplyWhiteBalance() {
+        if( previewBuilder == null || sessionType == SessionType.SESSIONTYPE_EXTENSION )
+            return;
+        camera_settings.setWhiteBalance(previewBuilder);
+        try {
+            setRepeatingRequest();
+        }
+        catch(CameraAccessException e) {
+            MyDebug.logStackTrace(TAG, "failed to reapply white balance", e);
+        }
+    }
+
     @Override
     public void clearFocusAndMetering() {
         if( MyDebug.LOG )
@@ -6348,6 +6363,7 @@ public class CameraController2 extends CameraController {
                         Log.d(TAG, "CONTROL_ENABLE_ZSL: " + (zsl==null ? "null" : zsl));
                     }
                 }
+                net.sourceforge.opencamera.ZernoHooks.applyStillOverride(stillBuilder); // Zerno: ISO / shutter priority
                 clearPending();
                 // shouldn't add preview surface as a target - no known benefit to doing so
                 stillBuilder.addTarget(imageReader.getSurface());
@@ -8394,6 +8410,7 @@ public class CameraController2 extends CameraController {
         /** Updates cached information regarding the capture result.
          */
         private void updateCachedCaptureResult(CaptureResult result) {
+            net.sourceforge.opencamera.ZernoHooks.captureResult(result); // Zerno
             if( modified_from_camera_settings ) {
                 // don't update capture results!
                 // otherwise have problem taking HDR photos twice in a row, the second one will pick up the exposure time as

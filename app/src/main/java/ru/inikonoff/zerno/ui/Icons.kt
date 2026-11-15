@@ -22,6 +22,7 @@ import kotlin.math.sin
 enum class ZernoIcon {
     DETAIL, HDR, GRID, LEVEL, TIMER, SETTINGS, SWITCH_CAMERA, GALLERY,
     FLASH_OFF, FLASH_AUTO, FLASH_ON, TORCH, EXPOSURE, QR, COPY, EYE, CLOSE, BACK, INFO,
+    METERING_SPOT, METERING_CENTRE, METERING_MATRIX, GREY_CARD,
 }
 
 @Composable
@@ -137,6 +138,28 @@ fun ZIcon(icon: ZernoIcon, tint: Color, modifier: Modifier = Modifier) {
                 }
                 drawPath(lid, tint, style = stroke)
                 drawCircle(tint, 2.6f * u, p(12f, 12f))
+            }
+            ZernoIcon.METERING_SPOT, ZernoIcon.METERING_CENTRE, ZernoIcon.METERING_MATRIX -> {
+                drawRoundRect(tint, p(3f, 5f), Size(18f * u, 14f * u), CornerRadius(2.2f * u), style = stroke)
+                when (icon) {
+                    ZernoIcon.METERING_SPOT -> drawCircle(tint, 1.6f * u, p(12f, 12f))
+                    ZernoIcon.METERING_CENTRE -> {
+                        drawCircle(tint, 3.8f * u, p(12f, 12f), style = stroke)
+                        drawCircle(tint, 1.2f * u, p(12f, 12f))
+                    }
+                    else -> {
+                        // the whole frame: brackets in the corners and a centre point
+                        line(6f, 8.5f, 6f, 7.5f); line(6f, 7.5f, 7.5f, 7.5f)
+                        line(18f, 8.5f, 18f, 7.5f); line(18f, 7.5f, 16.5f, 7.5f)
+                        line(6f, 15.5f, 6f, 16.5f); line(6f, 16.5f, 7.5f, 16.5f)
+                        line(18f, 15.5f, 18f, 16.5f); line(18f, 16.5f, 16.5f, 16.5f)
+                        drawCircle(tint, 1.2f * u, p(12f, 12f))
+                    }
+                }
+            }
+            ZernoIcon.GREY_CARD -> {
+                drawRoundRect(tint, p(4f, 4f), Size(16f * u, 16f * u), CornerRadius(2.5f * u), style = stroke)
+                drawRoundRect(tint.copy(alpha = tint.alpha * 0.5f), p(7f, 7f), Size(10f * u, 10f * u), CornerRadius(1.2f * u))
             }
             ZernoIcon.BACK -> { line(15f, 5f, 8f, 12f); line(8f, 12f, 15f, 19f) }
             ZernoIcon.INFO -> {

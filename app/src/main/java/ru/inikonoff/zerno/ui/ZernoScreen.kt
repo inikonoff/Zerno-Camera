@@ -171,6 +171,8 @@ fun ZernoScreen(adapter: CameraAdapter) {
             QrSheet(qr) { sheetOpen = false; adapter.setQrPinned(false) }
         }
 
+        state.greyCard?.let { GreyCardOverlay(it, adapter, middle) }
+
         if (state.zernoSettingsOpen) SettingsScreen(state, adapter)
 
         state.diagnostics?.let {

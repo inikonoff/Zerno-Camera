@@ -28,6 +28,7 @@ import net.sourceforge.opencamera.PreferenceKeys
 import net.sourceforge.opencamera.R
 import net.sourceforge.opencamera.ZernoHooks
 import net.sourceforge.opencamera.cameracontroller.CameraController
+import net.sourceforge.opencamera.cameracontroller.CameraController2
 import net.sourceforge.opencamera.preview.Preview
 import ru.inikonoff.zerno.viewer.ViewerActivity
 import kotlin.math.abs
@@ -100,6 +101,10 @@ class CameraAdapter(private val activity: MainActivity) {
      *  Zerno settings. Only writes preferences, the camera isn't available yet.
      */
     fun prepareEnginePreferences(firstRun: Boolean) {
+        priority = enumPref(KEY_PRIORITY, ExposureMode.AUTO).takeIf { it != ExposureMode.MANUAL } ?: ExposureMode.AUTO
+        priorityIso = prefs.getInt(KEY_PRIORITY_ISO, 0)
+        priorityShutter = prefs.getLong(KEY_PRIORITY_SHUTTER, 0L)
+        loadCustomWb(activity.applicationInterface.cameraIdPref)
         val editor = prefs.edit()
         if (!prefs.getBoolean(KEY_DEFAULTS_DONE, false)) {
             // one-off defaults for a fresh install
@@ -177,6 +182,10 @@ class CameraAdapter(private val activity: MainActivity) {
         val changed = mode != s.mode || detail != s.detail || hdr != s.hdr
         s = s.copy(caps = caps, mode = mode, detail = detail, hdr = hdr, cameraOpen = true)
         _state.value = s
+        // the camera's requests were built before we knew which camera it is
+        if (loadCustomWb(preview.cameraId) && controller?.whiteBalance == "manual") {
+            (controller as? CameraController2)?.zernoReapplyWhiteBalance()
+        }
         refreshPro()
         applyImageAdjustment(s.settings) // the preview view may be new
         preview.zernoApplyDefaultFocusArea()
@@ -244,6 +253,7 @@ class CameraAdapter(private val activity: MainActivity) {
             evStep = preview.exposureStep,
             wbPresets = wbPresets,
             wbKelvinValues = kelvins,
+            customWb = kelvins.isNotEmpty(),
             manualFocus = manualFocus,
             minFocusDistance = preview.minimumFocusDistance,
         )
@@ -263,12 +273,18 @@ class CameraAdapter(private val activity: MainActivity) {
         val s = _state.value
         val multiFrame = s.mode == Mode.NIGHT || (s.mode == Mode.PHOTO && s.hdr == Hdr.HDR)
         var pro = s.pro
-        if (open && s.mode == Mode.PRO && controller != null) {
-            val liveIso = if (controller.captureResultHasIso()) controller.captureResultIso() else 0
-            val liveShutter = if (controller.captureResultHasExposureTime()) controller.captureResultExposureTime() else 0L
+        if (open && s.mode == Mode.PRO && controller != null && !taking) {
+            val aeIso = if (controller.captureResultHasIso()) controller.captureResultIso() else 0
+            val aeShutter = if (controller.captureResultHasExposureTime()) controller.captureResultExposureTime() else 0L
+            computePriority(pro.exposureMode, aeIso, aeShutter)
             // round, so that noise in the auto exposure doesn't cause constant recomposition
-            pro = pro.copy(liveIso = liveIso, liveShutterNs = Scales.nearestShutter(liveShutter))
+            pro = when (pro.exposureMode) {
+                ExposureMode.ISO_PRIORITY -> pro.copy(liveIso = 0, liveShutterNs = Scales.nearestShutter(computedShutter))
+                ExposureMode.SHUTTER_PRIORITY -> pro.copy(liveIso = computedIso, liveShutterNs = 0L)
+                else -> pro.copy(liveIso = aeIso, liveShutterNs = Scales.nearestShutter(aeShutter))
+            }
         }
+        pollGreyCard()
         updatePreviewPosition()
         val (top, bottom) = previewExtent()
         pollTimings(open && preview.isPreviewStarted, taking, s)
@@ -413,6 +429,20 @@ class CameraAdapter(private val activity: MainActivity) {
                         "adjust ${s.settings.brightness}/${s.settings.contrast}/${s.settings.saturation}, size ${preview.currentPictureSize?.let { "${it.width}x${it.height}" }}",
             )
         }
+        // ISO / shutter priority: the photo is taken with manual values worked out from what the
+        // auto exposure is using right now (with the flash on, the camera's own exposure is used)
+        val controller = controller
+        val priorityShot = s.mode == Mode.PRO && controller != null &&
+                (s.pro.exposureMode == ExposureMode.ISO_PRIORITY || s.pro.exposureMode == ExposureMode.SHUTTER_PRIORITY) &&
+                (s.flash == Flash.OFF || s.flash == Flash.TORCH) &&
+                controller.captureResultHasIso() && controller.captureResultHasExposureTime()
+        if (priorityShot && controller != null) {
+            computePriority(s.pro.exposureMode, controller.captureResultIso(), controller.captureResultExposureTime())
+        }
+        val override = priorityShot && computedIso > 0 && computedShutter > 0
+        ZernoHooks.still_iso = if (override) computedIso else 0
+        ZernoHooks.still_exposure_time = if (override) computedShutter else 0L
+        if (override) timings = timings.copy(shotLabel = timings.shotLabel + ", ${s.pro.exposureMode} -> ISO $computedIso, ${Scales.formatShutter(computedShutter)}")
         ZernoHooks.exif_description = exifDescription(s)
         ZernoHooks.exif_software = "Zerno ${BuildConfig.VERSION_NAME}"
         activity.takePicture(false)
@@ -456,6 +486,8 @@ class CameraAdapter(private val activity: MainActivity) {
         if (s.settings.brightness != 0 || s.settings.contrast != 0 || s.settings.saturation != 0) {
             add("adjust=brightness %+d, contrast %+d, saturation %+d".format(s.settings.brightness, s.settings.contrast, s.settings.saturation))
         }
+        if (s.mode == Mode.PRO) add("exposure=${s.pro.exposureMode.name.lowercase().replace('_', '-')}")
+        if (s.mode == Mode.PRO && s.pro.customWb) add("wb=grey card")
         add("metering=${s.settings.metering.name.lowercase()}")
         add("focus=${s.focusMode.removePrefix("focus_mode_")}")
         if (s.zoom > 1.01f) add("zoom=%.1fx".format(java.util.Locale.US, s.zoom))
@@ -883,7 +915,11 @@ class CameraAdapter(private val activity: MainActivity) {
     private fun refreshPro() {
         val preview = preview ?: return
         val iso = prefs.getString(PreferenceKeys.ISOPreferenceKey, CameraController.ISO_DEFAULT) ?: CameraController.ISO_DEFAULT
-        val auto = iso == CameraController.ISO_DEFAULT || !_state.value.caps.manualExposure
+        val engineManual = iso != CameraController.ISO_DEFAULT && _state.value.caps.manualExposure
+        val exposureMode = if (engineManual) ExposureMode.MANUAL else if (_state.value.caps.manualExposure) priority else ExposureMode.AUTO
+        val isoAuto = exposureMode == ExposureMode.AUTO || exposureMode == ExposureMode.SHUTTER_PRIORITY
+        val shutterAuto = exposureMode == ExposureMode.AUTO || exposureMode == ExposureMode.ISO_PRIORITY
+        val wb = controller?.whiteBalance ?: WB_AUTO
         val manualFocus = preview.currentFocusValue == FOCUS_MANUAL
         val size = if (controller != null) preview.currentPictureSize else null
         _state.update {
@@ -892,12 +928,22 @@ class CameraAdapter(private val activity: MainActivity) {
                 focusMode = preview.currentFocusValue ?: Focus.CONTINUOUS,
                 ratio = size?.let { sz -> Ratio.entries.firstOrNull { r -> abs(sz.width.toDouble() / sz.height - r.value) < 0.02 } },
                 pro = it.pro.copy(
-                    isoAuto = auto,
-                    shutterAuto = auto,
-                    iso = if (auto) 0 else preview.parseManualISOValue(iso).coerceAtLeast(0),
-                    shutterNs = if (auto) 0L else prefs.getLong(PreferenceKeys.ExposureTimePreferenceKey, CameraController.EXPOSURE_TIME_DEFAULT),
+                    exposureMode = exposureMode,
+                    isoAuto = isoAuto,
+                    shutterAuto = shutterAuto,
+                    iso = when (exposureMode) {
+                        ExposureMode.MANUAL -> preview.parseManualISOValue(iso).coerceAtLeast(0)
+                        ExposureMode.ISO_PRIORITY -> priorityIso
+                        else -> 0
+                    },
+                    shutterNs = when (exposureMode) {
+                        ExposureMode.MANUAL -> prefs.getLong(PreferenceKeys.ExposureTimePreferenceKey, CameraController.EXPOSURE_TIME_DEFAULT)
+                        ExposureMode.SHUTTER_PRIORITY -> priorityShutter
+                        else -> 0L
+                    },
                     ev = if (controller != null && preview.supportsExposures()) preview.currentExposure else 0,
-                    wb = controller?.whiteBalance ?: WB_AUTO,
+                    wb = wb,
+                    customWb = wb == "manual" && ZernoHooks.custom_wb_gains != null,
                     kelvin = prefs.getInt(PreferenceKeys.WhiteBalanceTemperaturePreferenceKey, 5000),
                     focusAuto = !manualFocus,
                     focusDistance = prefs.getFloat(PreferenceKeys.FocusDistancePreferenceKey, 0f),
@@ -906,46 +952,113 @@ class CameraAdapter(private val activity: MainActivity) {
         }
     }
 
-    /** Camera2 has a single switch for automatic exposure, so ISO and shutter speed are either
-     *  both automatic or both manual. Choosing a manual value for one of them fixes the other at
-     *  whatever the auto exposure was using at that moment.
+    // ---- exposure: auto, ISO priority, shutter priority, manual ----------------------------
+
+    /** The priority mode chosen (AUTO, ISO_PRIORITY or SHUTTER_PRIORITY), used while the engine
+     *  is on automatic exposure; MANUAL is the engine's own manual exposure.
      */
-    fun setIso(iso: Int?) = setManualExposure(iso = iso, shutterNs = _state.value.pro.shutterNs.takeIf { !_state.value.pro.isoAuto }, autoRequested = iso == null)
+    private var priority = ExposureMode.AUTO
+    private var priorityIso = 0
+    private var priorityShutter = 0L
+    /** The values the next photo would be taken with in a priority mode (0 if not known). */
+    private var computedIso = 0
+    private var computedShutter = 0L
 
-    fun setShutter(shutterNs: Long?) = setManualExposure(iso = _state.value.pro.iso.takeIf { !_state.value.pro.isoAuto }, shutterNs = shutterNs, autoRequested = shutterNs == null)
-
-    private fun setManualExposure(iso: Int?, shutterNs: Long?, autoRequested: Boolean) {
+    /** Camera2 (before Android 16) can't fix just one of ISO and shutter speed. So in the
+     *  priority modes the preview keeps running on the camera's auto exposure, which measures the
+     *  scene (with the metering mode and exposure compensation), and the photo is taken with
+     *  manual values that give the same exposure: the fixed one as set, the other worked out.
+     */
+    private fun computePriority(mode: ExposureMode, aeIso: Int, aeShutter: Long) {
+        computedIso = 0
+        computedShutter = 0L
         val preview = preview ?: return
-        val controller = controller ?: return
+        if (aeIso <= 0 || aeShutter <= 0L) return
+        val exposure = aeIso.toDouble() * aeShutter // ISO x nanoseconds
+        when (mode) {
+            ExposureMode.ISO_PRIORITY -> if (priorityIso > 0) {
+                computedIso = priorityIso
+                computedShutter = (exposure / priorityIso).toLong().coerceIn(preview.minimumExposureTime, preview.maximumExposureTime)
+            }
+            ExposureMode.SHUTTER_PRIORITY -> if (priorityShutter > 0L) {
+                computedShutter = priorityShutter
+                computedIso = (exposure / priorityShutter).roundToInt().coerceIn(preview.minimumISO, preview.maximumISO)
+            }
+            else -> {}
+        }
+    }
+
+    /** Sets ISO, or null for automatic. With shutter speed automatic this gives ISO priority. */
+    fun setIso(iso: Int?) {
         val s = _state.value
         if (!s.caps.manualExposure) return
-        ZernoHooks.suppressToastsFor(TOAST_QUIET_MS)
-        if (autoRequested) {
-            if (s.pro.isoAuto) return
-            prefs.edit()
-                .remove(PreferenceKeys.ISOPreferenceKey)
-                .remove(PreferenceKeys.ExposureTimePreferenceKey)
-                .apply()
-            updateEngine()
-            return
+        when (s.pro.exposureMode) {
+            ExposureMode.AUTO -> if (iso != null) setPriority(ExposureMode.ISO_PRIORITY, iso = iso)
+            ExposureMode.ISO_PRIORITY -> if (iso == null) setPriority(ExposureMode.AUTO) else setPriority(ExposureMode.ISO_PRIORITY, iso = iso)
+            ExposureMode.SHUTTER_PRIORITY -> if (iso != null) enterManual(iso, priorityShutter)
+            ExposureMode.MANUAL -> if (iso == null) {
+                leaveManual(ExposureMode.SHUTTER_PRIORITY, shutter = s.pro.shutterNs)
+            } else if (iso != s.pro.iso) {
+                ZernoHooks.suppressToastsFor(TOAST_QUIET_MS)
+                preview?.setISO(iso)
+                refreshPro()
+            }
         }
-        if (s.pro.isoAuto) {
-            // auto -> manual: start from what the auto exposure is using right now
-            val newIso = iso
-                ?: (if (controller.captureResultHasIso()) controller.captureResultIso() else 400)
-            val newShutter = shutterNs
-                ?: (if (controller.captureResultHasExposureTime()) controller.captureResultExposureTime() else CameraController.EXPOSURE_TIME_DEFAULT)
-            prefs.edit()
-                .putString(PreferenceKeys.ISOPreferenceKey, newIso.coerceIn(preview.minimumISO, preview.maximumISO).toString())
-                .putLong(PreferenceKeys.ExposureTimePreferenceKey, newShutter.coerceIn(preview.minimumExposureTime, preview.maximumExposureTime))
-                .apply()
-            updateEngine()
-        } else {
-            // already manual: the engine can change these directly, without a camera restart
-            if (iso != null && iso != s.pro.iso) preview.setISO(iso)
-            if (shutterNs != null && shutterNs != s.pro.shutterNs) preview.setExposureTime(shutterNs)
-            refreshPro()
+    }
+
+    /** Sets the shutter speed, or null for automatic. With ISO automatic this gives shutter priority. */
+    fun setShutter(shutterNs: Long?) {
+        val s = _state.value
+        if (!s.caps.manualExposure) return
+        when (s.pro.exposureMode) {
+            ExposureMode.AUTO -> if (shutterNs != null) setPriority(ExposureMode.SHUTTER_PRIORITY, shutter = shutterNs)
+            ExposureMode.SHUTTER_PRIORITY -> if (shutterNs == null) setPriority(ExposureMode.AUTO) else setPriority(ExposureMode.SHUTTER_PRIORITY, shutter = shutterNs)
+            ExposureMode.ISO_PRIORITY -> if (shutterNs != null) enterManual(priorityIso, shutterNs)
+            ExposureMode.MANUAL -> if (shutterNs == null) {
+                leaveManual(ExposureMode.ISO_PRIORITY, iso = s.pro.iso)
+            } else if (shutterNs != s.pro.shutterNs) {
+                ZernoHooks.suppressToastsFor(TOAST_QUIET_MS)
+                preview?.setExposureTime(shutterNs)
+                refreshPro()
+            }
         }
+    }
+
+    /** A priority mode needs no change in the engine: the preview stays on auto exposure. */
+    private fun setPriority(mode: ExposureMode, iso: Int = priorityIso, shutter: Long = priorityShutter) {
+        priority = mode
+        priorityIso = iso
+        priorityShutter = shutter
+        prefs.edit().putString(KEY_PRIORITY, mode.name).putInt(KEY_PRIORITY_ISO, iso).putLong(KEY_PRIORITY_SHUTTER, shutter).apply()
+        refreshPro()
+        poll()
+    }
+
+    /** Both ISO and shutter speed fixed: the engine's manual exposure (the preview shows it too). */
+    private fun enterManual(iso: Int, shutter: Long) {
+        val preview = preview ?: return
+        priority = ExposureMode.AUTO
+        prefs.edit()
+            .putString(KEY_PRIORITY, ExposureMode.AUTO.name)
+            .putString(PreferenceKeys.ISOPreferenceKey, iso.coerceIn(preview.minimumISO, preview.maximumISO).toString())
+            .putLong(PreferenceKeys.ExposureTimePreferenceKey, shutter.coerceIn(preview.minimumExposureTime, preview.maximumExposureTime))
+            .apply()
+        updateEngine()
+    }
+
+    /** One of ISO and shutter speed back to automatic: back to the camera's auto exposure, with
+     *  the other one kept as a priority.
+     */
+    private fun leaveManual(mode: ExposureMode, iso: Int = priorityIso, shutter: Long = priorityShutter) {
+        priority = mode
+        priorityIso = iso
+        priorityShutter = shutter
+        prefs.edit()
+            .putString(KEY_PRIORITY, mode.name).putInt(KEY_PRIORITY_ISO, iso).putLong(KEY_PRIORITY_SHUTTER, shutter)
+            .remove(PreferenceKeys.ISOPreferenceKey)
+            .remove(PreferenceKeys.ExposureTimePreferenceKey)
+            .apply()
+        updateEngine()
     }
 
     fun setEv(ev: Int) {
@@ -959,6 +1072,7 @@ class CameraAdapter(private val activity: MainActivity) {
     /** Selects a white balance preset (an engine value such as "auto" or "daylight"). */
     fun setWhiteBalance(value: String) {
         val controller = controller ?: return
+        clearCustomWb()
         controller.setWhiteBalance(value)
         activity.applicationInterface.setWhiteBalancePref(value)
         refreshPro()
@@ -974,8 +1088,167 @@ class CameraAdapter(private val activity: MainActivity) {
             controller.setWhiteBalance("manual")
             activity.applicationInterface.setWhiteBalancePref("manual")
         }
+        val wasCustom = clearCustomWb()
         preview.setWhiteBalanceTemperature(kelvin)
+        // the temperature may be unchanged, in which case the engine wouldn't redo the gains
+        if (wasCustom) (controller as? CameraController2)?.zernoReapplyWhiteBalance()
         refreshPro()
+    }
+
+    // ---- white balance from a grey card -----------------------------------------------------
+
+    /** Loads the grey-card gains for a camera (if a grey-card white balance is in use). */
+    private fun loadCustomWb(cameraId: Int): Boolean {
+        val gains = if (prefs.getBoolean(KEY_WB_CUSTOM, false)) decodeGains(prefs.getString(KEY_WB_GAINS + cameraId, null)) else null
+        ZernoHooks.custom_wb_gains = gains
+        return gains != null
+    }
+
+    /** Stops using the grey-card gains; returns whether they were in use. */
+    private fun clearCustomWb(): Boolean {
+        val was = ZernoHooks.custom_wb_gains != null
+        ZernoHooks.custom_wb_gains = null
+        prefs.edit().putBoolean(KEY_WB_CUSTOM, false).apply()
+        return was
+    }
+
+    private fun decodeGains(text: String?): FloatArray? =
+        text?.split(',')?.mapNotNull { it.toFloatOrNull() }?.takeIf { it.size == 4 }?.toFloatArray()
+
+    /** What to go back to if a measurement is cancelled or fails. */
+    private var greyCardBefore: Pair<String, FloatArray?>? = null
+    private var greyCardIteration = 0
+    private var greyCardAt = 0L
+    private var greyCardActive = false
+
+    /** Shows the grey-card target. */
+    fun openGreyCard() {
+        val controller = controller ?: return
+        if (!_state.value.caps.customWb) return
+        greyCardBefore = (controller.whiteBalance ?: WB_AUTO) to ZernoHooks.custom_wb_gains?.copyOf()
+        _state.update { it.copy(greyCard = GreyCardState(hasMeasurement = it.pro.customWb)) }
+    }
+
+    /** Measures the white balance from what's in the target. Done in a few rounds: each round
+     *  corrects the gains by how far the grey card still is from neutral in the preview.
+     */
+    fun measureGreyCard() {
+        val controller = controller as? CameraController2 ?: return
+        val start = ZernoHooks.custom_wb_gains ?: ZernoHooks.last_wb_gains ?: floatArrayOf(2f, 1f, 1f, 2f)
+        ZernoHooks.custom_wb_gains = start.copyOf()
+        if (controller.whiteBalance != "manual") {
+            controller.setWhiteBalance("manual")
+            activity.applicationInterface.setWhiteBalancePref("manual")
+        }
+        controller.zernoReapplyWhiteBalance()
+        greyCardIteration = 0
+        greyCardAt = SystemClock.uptimeMillis() + GREY_CARD_SETTLE_MS
+        greyCardActive = true
+        _state.update { it.copy(greyCard = it.greyCard?.copy(measuring = true, message = null)) }
+    }
+
+    fun cancelGreyCard() {
+        greyCardActive = false
+        restoreBeforeGreyCard()
+        _state.update { it.copy(greyCard = null) }
+        refreshPro()
+    }
+
+    private fun restoreBeforeGreyCard() {
+        val (wb, gains) = greyCardBefore ?: return
+        val controller = controller ?: return
+        ZernoHooks.custom_wb_gains = gains
+        prefs.edit().putBoolean(KEY_WB_CUSTOM, gains != null).apply()
+        controller.setWhiteBalance(wb)
+        activity.applicationInterface.setWhiteBalancePref(wb)
+        if (wb == "manual") (controller as? CameraController2)?.zernoReapplyWhiteBalance()
+    }
+
+    private fun pollGreyCard() {
+        if (!greyCardActive || SystemClock.uptimeMillis() < greyCardAt) return
+        val controller = controller as? CameraController2
+        val gains = ZernoHooks.custom_wb_gains?.copyOf()
+        if (controller == null || gains == null) {
+            greyCardActive = false
+            return
+        }
+        val patch = greyPatch()
+        val problem = when {
+            patch == null -> R.string.zerno_grey_failed
+            patch.tooDark -> R.string.zerno_grey_too_dark
+            patch.tooBright -> R.string.zerno_grey_too_bright
+            else -> null
+        }
+        if (problem != null || patch == null) {
+            greyCardActive = false
+            restoreBeforeGreyCard()
+            _state.update { it.copy(greyCard = it.greyCard?.copy(measuring = false, message = problem)) }
+            return
+        }
+        val toRed = patch.g / patch.r
+        val toBlue = patch.g / patch.b
+        if ((abs(toRed - 1f) < 0.01f && abs(toBlue - 1f) < 0.01f) || greyCardIteration >= GREY_CARD_ROUNDS) {
+            // done
+            greyCardActive = false
+            val cameraId = preview?.cameraId ?: 0
+            prefs.edit()
+                .putBoolean(KEY_WB_CUSTOM, true)
+                .putString(KEY_WB_GAINS + cameraId, gains.joinToString(",") { "%.4f".format(java.util.Locale.US, it) })
+                .apply()
+            _state.update { it.copy(greyCard = null) }
+            refreshPro()
+            return
+        }
+        gains[0] = (gains[0] * toRed).coerceIn(0.25f, 10f)
+        gains[3] = (gains[3] * toBlue).coerceIn(0.25f, 10f)
+        ZernoHooks.custom_wb_gains = gains
+        controller.zernoReapplyWhiteBalance()
+        greyCardIteration++
+        greyCardAt = SystemClock.uptimeMillis() + GREY_CARD_SETTLE_MS
+    }
+
+    private class Patch(val r: Float, val g: Float, val b: Float, val tooDark: Boolean, val tooBright: Boolean)
+
+    /** The average linear colour inside the grey-card target, in the middle of the preview. */
+    private fun greyPatch(): Patch? {
+        val view = preview?.view as? TextureView ?: return null
+        if (!view.isAvailable || view.width == 0 || view.height == 0) return null
+        return try {
+            val width = 200
+            val height = (width.toLong() * view.height / view.width).toInt().coerceIn(50, 800)
+            val bitmap = view.getBitmap(width, height) ?: return null
+            val side = (GREY_CARD_DP * activity.resources.displayMetrics.density / view.width * width).roundToInt().coerceIn(6, minOf(width, height))
+            val x0 = (width - side) / 2
+            val y0 = (height - side) / 2
+            val pixels = IntArray(side * side)
+            bitmap.getPixels(pixels, 0, side, x0, y0, side, side)
+            bitmap.recycle()
+            var r = 0.0
+            var g = 0.0
+            var b = 0.0
+            var used = 0
+            var clipped = 0
+            var dark = 0
+            for (c in pixels) {
+                val cr = (c shr 16) and 0xff
+                val cg = (c shr 8) and 0xff
+                val cb = c and 0xff
+                when {
+                    maxOf(cr, cg, cb) >= 250 -> clipped++
+                    maxOf(cr, cg, cb) < 12 -> dark++
+                    else -> {
+                        r += SRGB_TO_LINEAR[cr]
+                        g += SRGB_TO_LINEAR[cg]
+                        b += SRGB_TO_LINEAR[cb]
+                        used++
+                    }
+                }
+            }
+            if (used < pixels.size / 3) Patch(0f, 0f, 0f, tooDark = dark >= clipped, tooBright = clipped > dark)
+            else Patch((r / used).toFloat(), (g / used).toFloat(), (b / used).toFloat(), tooDark = false, tooBright = false)
+        } catch (e: RuntimeException) {
+            null
+        }
     }
 
     /** Sets the manual focus distance in dioptres (0 = infinity), or null for autofocus. Focus
@@ -1048,6 +1321,20 @@ class CameraAdapter(private val activity: MainActivity) {
         private const val KEY_CONTRAST = "zerno_contrast"
         private const val KEY_SATURATION = "zerno_saturation"
         private const val KEY_QR = "zerno_qr"
+        private const val KEY_PRIORITY = "zerno_exposure_priority"
+        private const val KEY_PRIORITY_ISO = "zerno_priority_iso"
+        private const val KEY_PRIORITY_SHUTTER = "zerno_priority_shutter"
+        private const val KEY_WB_CUSTOM = "zerno_wb_grey_card"
+        private const val KEY_WB_GAINS = "zerno_wb_gains_"
+        private const val GREY_CARD_SETTLE_MS = 450L
+        private const val GREY_CARD_ROUNDS = 4
+        /** The side of the grey-card target on screen. */
+        const val GREY_CARD_DP = 72
+
+        private val SRGB_TO_LINEAR = DoubleArray(256) {
+            val v = it / 255.0
+            if (v <= 0.04045) v / 12.92 else Math.pow((v + 0.055) / 1.055, 2.4)
+        }
         private const val KEY_PEAKING = "zerno_focus_peaking"
         private const val ZEBRA_DEFAULT = "247"
         private const val KEY_CHROMA = "zerno_chroma_denoise"
