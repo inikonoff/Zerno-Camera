@@ -200,6 +200,28 @@ class CameraAdapter(private val activity: MainActivity) {
         }
     }
 
+    private var maxFrameCameraId = -1
+    private var maxFrameDuration = 0L
+
+    /** The longest shutter speed the camera can really do. Some cameras claim exposure times
+     *  longer than the longest frame they can deliver (e.g. 32s, but frames of at most 0.27s),
+     *  and then cut every exposure to the frame time; the frame limit is the true one.
+     */
+    private fun maxShutter(preview: Preview): Long {
+        if (maxFrameCameraId != preview.cameraId) {
+            maxFrameCameraId = preview.cameraId
+            maxFrameDuration = try {
+                val manager = activity.getSystemService(Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
+                manager.getCameraCharacteristics(manager.cameraIdList[preview.cameraId])
+                    .get(android.hardware.camera2.CameraCharacteristics.SENSOR_INFO_MAX_FRAME_DURATION) ?: 0L
+            } catch (e: Exception) {
+                0L
+            }
+        }
+        val max = preview.maximumExposureTime
+        return if (maxFrameDuration > preview.minimumExposureTime) minOf(max, maxFrameDuration) else max
+    }
+
     private fun readCapabilities(preview: Preview): Capabilities {
         val modes = buildList {
             if (activity.supportsNoiseReduction()) add(Mode.NIGHT)
@@ -250,7 +272,7 @@ class CameraAdapter(private val activity: MainActivity) {
             zoomMax = if (preview.supportsZoom()) preview.maxZoomRatio else 1f,
             manualExposure = manualExposure,
             isoValues = if (manualExposure) Scales.isoValues(preview.minimumISO, preview.maximumISO) else emptyList(),
-            shutterValues = if (manualExposure) Scales.shutterValues(preview.minimumExposureTime, preview.maximumExposureTime) else emptyList(),
+            shutterValues = if (manualExposure) Scales.shutterValues(preview.minimumExposureTime, maxShutter(preview)) else emptyList(),
             evMin = if (preview.supportsExposures()) preview.minimumExposure else 0,
             evMax = if (preview.supportsExposures()) preview.maximumExposure else 0,
             evStep = preview.exposureStep,
@@ -1035,7 +1057,7 @@ class CameraAdapter(private val activity: MainActivity) {
         when (mode) {
             ExposureMode.ISO_PRIORITY -> if (priorityIso > 0) {
                 computedIso = priorityIso
-                computedShutter = (exposure / priorityIso).toLong().coerceIn(preview.minimumExposureTime, preview.maximumExposureTime)
+                computedShutter = (exposure / priorityIso).toLong().coerceIn(preview.minimumExposureTime, maxShutter(preview))
             }
             ExposureMode.SHUTTER_PRIORITY -> if (priorityShutter > 0L) {
                 computedShutter = priorityShutter
@@ -1098,7 +1120,7 @@ class CameraAdapter(private val activity: MainActivity) {
         prefs.edit()
             .putString(KEY_PRIORITY, ExposureMode.AUTO.name)
             .putString(PreferenceKeys.ISOPreferenceKey, iso.coerceIn(preview.minimumISO, preview.maximumISO).toString())
-            .putLong(PreferenceKeys.ExposureTimePreferenceKey, shutter.coerceIn(preview.minimumExposureTime, preview.maximumExposureTime))
+            .putLong(PreferenceKeys.ExposureTimePreferenceKey, shutter.coerceIn(preview.minimumExposureTime, maxShutter(preview)))
             .apply()
         updateEngine()
     }
