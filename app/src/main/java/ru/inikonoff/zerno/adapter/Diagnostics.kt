@@ -58,6 +58,8 @@ object Diagnostics {
                 line("image received -> capture completed", imageReceived, captureCompleted)
                 line("shutter pressed -> ready for next photo", press, ready)
                 line("shutter pressed -> saved", press, saved)
+                appendLine("requested: ${net.sourceforge.opencamera.ZernoHooks.last_still_request}")
+                appendLine("camera reported: ${net.sourceforge.opencamera.ZernoHooks.last_still_result}")
             }
         }
         appendLine()
@@ -126,6 +128,7 @@ object Diagnostics {
         appendLine("exposure compensation: step ${c.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP)} EV, range ${c.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE)}")
         appendLine("optical stabilisation (OIS): ${c.get(CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION)?.contains(1) == true}")
         appendLine("metering regions: AE ${c.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE)}, AF ${c.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AF)}")
+        appendLine("max frame duration (ns): ${c.get(CameraCharacteristics.SENSOR_INFO_MAX_FRAME_DURATION)}")
         appendLine("ISO range: ${c.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)}, exposure range (ns): ${c.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)}")
         appendLine("focal lengths: ${c.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)?.joinToString(",")}, apertures: ${c.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)?.joinToString(",")}")
     }

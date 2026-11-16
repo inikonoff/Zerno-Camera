@@ -73,17 +73,48 @@ public final class ZernoHooks {
 
     /** Called with the request for a single photo, just before it is sent to the camera. */
     public static void applyStillOverride(android.hardware.camera2.CaptureRequest.Builder builder) {
+        if( !ZERNO_UI )
+            return;
         final int iso = still_iso;
         final long exposure_time = still_exposure_time;
-        if( !ZERNO_UI || iso <= 0 || exposure_time <= 0 )
-            return;
-        builder.set(android.hardware.camera2.CaptureRequest.CONTROL_AE_MODE, android.hardware.camera2.CameraMetadata.CONTROL_AE_MODE_OFF);
-        builder.set(android.hardware.camera2.CaptureRequest.SENSOR_SENSITIVITY, iso);
-        builder.set(android.hardware.camera2.CaptureRequest.SENSOR_EXPOSURE_TIME, exposure_time);
-        if( android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O ) {
-            // zero shutter lag would hand back a frame from before the press, taken with the preview's exposure
-            builder.set(android.hardware.camera2.CaptureRequest.CONTROL_ENABLE_ZSL, false);
+        if( iso > 0 && exposure_time > 0 ) {
+            builder.set(android.hardware.camera2.CaptureRequest.CONTROL_AE_MODE, android.hardware.camera2.CameraMetadata.CONTROL_AE_MODE_OFF);
+            builder.set(android.hardware.camera2.CaptureRequest.SENSOR_SENSITIVITY, iso);
+            builder.set(android.hardware.camera2.CaptureRequest.SENSOR_EXPOSURE_TIME, exposure_time);
+            if( android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O ) {
+                // zero shutter lag would hand back a frame from before the press, taken with the preview's exposure
+                builder.set(android.hardware.camera2.CaptureRequest.CONTROL_ENABLE_ZSL, false);
+            }
         }
+        // With manual exposure, the time between frames must be at least the exposure time. Most
+        // cameras stretch it by themselves, but some keep the frame time the auto exposure was
+        // using (e.g. 1/3s) and cut the exposure short to fit - so ask for it explicitly.
+        Integer ae_mode = builder.get(android.hardware.camera2.CaptureRequest.CONTROL_AE_MODE);
+        Long requested_exposure = builder.get(android.hardware.camera2.CaptureRequest.SENSOR_EXPOSURE_TIME);
+        if( ae_mode != null && ae_mode == android.hardware.camera2.CameraMetadata.CONTROL_AE_MODE_OFF && requested_exposure != null ) {
+            Long frame = builder.get(android.hardware.camera2.CaptureRequest.SENSOR_FRAME_DURATION);
+            if( frame == null || frame < requested_exposure )
+                builder.set(android.hardware.camera2.CaptureRequest.SENSOR_FRAME_DURATION, requested_exposure);
+            Integer requested_iso = builder.get(android.hardware.camera2.CaptureRequest.SENSOR_SENSITIVITY);
+            last_still_request = "manual: ISO " + requested_iso + ", exposure " + formatNs(requested_exposure) +
+                    ", frame " + formatNs(builder.get(android.hardware.camera2.CaptureRequest.SENSOR_FRAME_DURATION));
+        }
+        else {
+            last_still_request = "auto exposure";
+        }
+        last_still_result = "-";
+    }
+
+    /** What the last photo was asked for, and what the camera reports it did (for diagnostics). */
+    public static volatile String last_still_request = "-";
+    public static volatile String last_still_result = "-";
+
+    private static String formatNs(Long ns) {
+        if( ns == null )
+            return "-";
+        if( ns >= 300000000L )
+            return String.format(java.util.Locale.US, "%.1fs", ns / 1.0e9);
+        return "1/" + Math.round(1.0e9 / ns) + "s";
     }
 
     // ---- white balance ----
@@ -100,6 +131,18 @@ public final class ZernoHooks {
     public static void captureResult(android.hardware.camera2.CaptureResult result) {
         if( !ZERNO_UI )
             return;
+        try {
+            // a photo (not a preview frame): record what the camera actually did
+            Integer intent = result.get(android.hardware.camera2.CaptureResult.CONTROL_CAPTURE_INTENT);
+            if( intent != null && intent != android.hardware.camera2.CameraMetadata.CONTROL_CAPTURE_INTENT_PREVIEW ) {
+                last_still_result = "ISO " + result.get(android.hardware.camera2.CaptureResult.SENSOR_SENSITIVITY) +
+                        ", exposure " + formatNs(result.get(android.hardware.camera2.CaptureResult.SENSOR_EXPOSURE_TIME)) +
+                        ", frame " + formatNs(result.get(android.hardware.camera2.CaptureResult.SENSOR_FRAME_DURATION));
+            }
+        }
+        catch(RuntimeException e) {
+            // not reported
+        }
         try {
             android.hardware.camera2.params.RggbChannelVector gains = result.get(android.hardware.camera2.CaptureResult.COLOR_CORRECTION_GAINS);
             if( gains != null )
