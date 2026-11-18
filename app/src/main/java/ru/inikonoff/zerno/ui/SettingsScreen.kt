@@ -168,11 +168,22 @@ fun SettingsScreen(state: UiState, adapter: CameraAdapter) {
                     adapter.setImageAdjustment(settings.brightness, settings.contrast, it)
                 }
                 Adjustment(stringResource(R.string.zerno_sharpness), settings.sharpness, adapter::setSharpness)
+                BasicText(stringResource(R.string.zerno_grain), modifier = Modifier.padding(top = 8.dp, bottom = 6.dp), style = Title)
+                Segmented(
+                    options = listOf(
+                        0 to stringResource(R.string.zerno_chroma_off),
+                        1 to stringResource(R.string.zerno_chroma_light),
+                        2 to stringResource(R.string.zerno_chroma_medium),
+                        3 to stringResource(R.string.zerno_chroma_strong),
+                    ),
+                    selected = settings.grain,
+                    onSelect = adapter::setGrain,
+                )
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     BasicText(stringResource(R.string.zerno_image_hint), modifier = Modifier.weight(1f), style = Hint)
-                    if (settings.brightness != 0 || settings.contrast != 0 || settings.saturation != 0 || settings.sharpness != 0) {
+                    if (settings.brightness != 0 || settings.contrast != 0 || settings.saturation != 0 || settings.sharpness != 0 || settings.grain != 0) {
                         Spacer(Modifier.width(10.dp))
-                        Pill(stringResource(R.string.zerno_reset), selected = false) { adapter.setImageAdjustment(0, 0, 0); adapter.setSharpness(0) }
+                        Pill(stringResource(R.string.zerno_reset), selected = false) { adapter.setImageAdjustment(0, 0, 0); adapter.setSharpness(0); adapter.setGrain(0) }
                     }
                 }
             }

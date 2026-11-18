@@ -139,6 +139,7 @@ class CameraAdapter(private val activity: MainActivity) {
             saturation = prefs.getInt(KEY_SATURATION, 0),
             chromaDenoise = prefs.getInt(KEY_CHROMA, 0).coerceIn(0, Settings.CHROMA_MAX),
             sharpness = prefs.getInt(KEY_SHARPNESS, 0).coerceIn(-Settings.ADJUST_RANGE, Settings.ADJUST_RANGE),
+            grain = prefs.getInt(KEY_GRAIN, 0).coerceIn(0, Settings.GRAIN_MAX),
             raw = prefs.getString(PreferenceKeys.RawPreferenceKey, "preference_raw_no") != "preference_raw_no",
             nightFrames = prefs.getInt(KEY_NIGHT_FRAMES, 0).takeIf { it in Settings.NIGHT_FRAMES } ?: 0,
             ois = prefs.getBoolean(KEY_OIS, true),
@@ -155,6 +156,7 @@ class CameraAdapter(private val activity: MainActivity) {
         applyImageAdjustment(settings)
         ZernoHooks.chroma_denoise = settings.chromaDenoise
         ZernoHooks.sharpness = settings.sharpness
+        ZernoHooks.grain = settings.grain
         ZernoHooks.night_frames = settings.nightFrames
         ZernoHooks.ois_disabled = !settings.ois
 
@@ -550,6 +552,7 @@ class CameraAdapter(private val activity: MainActivity) {
         if (s.mode != Mode.NIGHT) add("detail=${s.detail.name.lowercase()}")
         add("chroma=${if (s.settings.chromaDenoise == 0) "off" else "${s.settings.chromaDenoise}/${Settings.CHROMA_MAX}"}")
         if (s.settings.sharpness != 0) add("sharpness=%+d".format(s.settings.sharpness))
+        if (s.settings.grain != 0) add("grain=${s.settings.grain}/${Settings.GRAIN_MAX}")
         if (s.mode == Mode.NIGHT && s.settings.nightFrames > 0) add("frames=${s.settings.nightFrames}")
         if (s.mode == Mode.PHOTO && s.hdr != Hdr.OFF) add("hdr=${s.hdr.name.lowercase()}")
         if (s.settings.brightness != 0 || s.settings.contrast != 0 || s.settings.saturation != 0) {
@@ -695,6 +698,14 @@ class CameraAdapter(private val activity: MainActivity) {
         prefs.edit().putString(PreferenceKeys.RawPreferenceKey, if (on) "preference_raw_yes" else "preference_raw_no").apply()
         _state.update { it.copy(settings = it.settings.copy(raw = on)) }
         updateEngine()
+    }
+
+    /** Film grain (0..3) added to each photo as it is saved (see ZernoGrain). */
+    fun setGrain(level: Int) {
+        val value = level.coerceIn(0, Settings.GRAIN_MAX)
+        prefs.edit().putInt(KEY_GRAIN, value).apply()
+        ZernoHooks.grain = value
+        _state.update { it.copy(settings = it.settings.copy(grain = value)) }
     }
 
     /** Frames in a Night burst (0 = automatic). Applies from the next photo. */
@@ -1453,6 +1464,7 @@ class CameraAdapter(private val activity: MainActivity) {
         private const val KEY_SATURATION = "zerno_saturation"
         private const val KEY_QR = "zerno_qr"
         private const val KEY_SHARPNESS = "zerno_sharpness"
+        private const val KEY_GRAIN = "zerno_grain"
         private const val KEY_NIGHT_FRAMES = "zerno_night_frames"
         private const val KEY_OIS = "zerno_ois"
         private const val KEY_FOCUS_HINT_SHOWN = "zerno_focus_hint_shown"
