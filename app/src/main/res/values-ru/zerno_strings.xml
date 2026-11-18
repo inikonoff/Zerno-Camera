@@ -183,4 +183,10 @@
     <string name="zerno_raw_hint">Кроме режимов НОЧЬ и HDR. Цветной шум, резкость и коррекция применяются только к JPEG.</string>
     <string name="zerno_info_sharpness">Резкость</string>
     <string name="zerno_info_raw">RAW</string>
+    <string name="zerno_frames">Кадры</string>
+    <string name="zerno_frames_auto">Авто</string>
+    <string name="zerno_resolution">Разрешение</string>
+    <string name="zerno_resolution_item">%1$s Мп · %2$d×%3$d</string>
+    <string name="zerno_resolution_hint">Для формата, выбранного на экране камеры. При смене формата снова берётся наибольшее разрешение.</string>
+    <string name="zerno_ois">Оптическая стабилизация</string>
 </resources>

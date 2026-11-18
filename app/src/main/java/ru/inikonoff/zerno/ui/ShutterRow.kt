@@ -20,6 +20,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -78,6 +89,7 @@ fun ShutterRow(
             active = exposureOpen || state.pro.ev != 0,
             onClick = onExposure,
             onDoubleClick = onExposureReset, // a double tap sets the compensation back to 0
+            onLongDrag = adapter::stepEv, // press, hold and slide: darker to the left, brighter to the right
         ) { tint ->
             if (state.pro.ev != 0) {
                 Label(Scales.formatEv(state.pro.ev, state.caps.evStep), Modifier.upright(state.uiRotation), color = tint, size = 12.sp, weight = FontWeight.Bold)
@@ -97,6 +109,7 @@ fun ShutterRow(
             description = stringResource(R.string.zerno_focus),
             active = focusOpen || state.focusMode != Focus.CONTINUOUS,
             onClick = onFocus,
+            onDoubleClick = { adapter.setFocusMode(Focus.CONTINUOUS) }, // a double tap goes back to AF-C
         ) { tint ->
             Label(focusShortName(state.focusMode), Modifier.upright(state.uiRotation), color = tint, size = 12.sp, weight = FontWeight.Bold)
         }
@@ -126,8 +139,12 @@ private fun SideButton(
     active: Boolean,
     onClick: () -> Unit,
     onDoubleClick: (() -> Unit)? = null,
+    /** Long press, then slide: called with +1 / -1 for each step to the right / left. */
+    onLongDrag: ((Int) -> Unit)? = null,
     content: @Composable (tint: Color) -> Unit,
 ) {
+    val haptic = LocalHapticFeedback.current
+    val currentDrag by rememberUpdatedState(onLongDrag)
     Box(
         Modifier
             .size(44.dp)
@@ -139,6 +156,32 @@ private fun SideButton(
                 if (!visible) Modifier
                 else if (onDoubleClick != null) Modifier.tapOrDouble(onDoubleTap = onDoubleClick, onTap = onClick)
                 else Modifier.tap(onClick = onClick)
+            )
+            .then(
+                if (!visible || onLongDrag == null) Modifier
+                else Modifier.pointerInput(Unit) {
+                    val step = 14.dp.toPx()
+                    var travel = 0f
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = {
+                            travel = 0f
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        },
+                    ) { change, drag ->
+                        change.consume()
+                        travel += drag.x
+                        while (travel >= step) {
+                            travel -= step
+                            currentDrag?.invoke(1)
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
+                        while (travel <= -step) {
+                            travel += step
+                            currentDrag?.invoke(-1)
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
+                    }
+                }
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -149,17 +192,40 @@ private fun SideButton(
 @Composable
 private fun Thumbnail(state: UiState, onClick: () -> Unit) {
     val description = stringResource(R.string.zerno_gallery)
-    // pulse while photos are still being processed and saved in the background
-    val pulse = rememberInfiniteTransition(label = "saving")
-    val pulseAlpha by pulse.animateFloat(1f, 0.35f, infiniteRepeatable(tween(500), RepeatMode.Reverse), label = "savingAlpha")
+    // while photos are still being processed and saved in the background, a bright segment runs
+    // round the frame (the save time isn't known in advance, so there's no percentage)
+    val running = rememberInfiniteTransition(label = "saving")
+    val phase by running.animateFloat(0f, 1f, infiniteRepeatable(tween(1100, easing = LinearEasing)), label = "savingPhase")
+    val saving = state.saving
     Box(
         Modifier
             .size(52.dp)
             .upright(state.uiRotation)
-            .alpha(if (state.saving) pulseAlpha else 1f)
             .clip(RoundedCornerShape(12.dp))
             .background(ZernoColors.Chip)
             .border(1.5.dp, Color(0xCCFFFFFF), RoundedCornerShape(12.dp))
+            .drawWithContent {
+                drawContent()
+                if (saving) {
+                    val stroke = 3.dp.toPx()
+                    val frame = Path().apply {
+                        addRoundRect(
+                            RoundRect(
+                                stroke / 2f, stroke / 2f, size.width - stroke / 2f, size.height - stroke / 2f,
+                                CornerRadius(12.dp.toPx() - stroke / 2f),
+                            )
+                        )
+                    }
+                    val measure = PathMeasure().apply { setPath(frame, true) }
+                    val length = measure.length
+                    val start = phase * length
+                    val end = start + length * 0.3f
+                    val segment = Path()
+                    measure.getSegment(start, minOf(end, length), segment, true)
+                    if (end > length) measure.getSegment(0f, end - length, segment, true)
+                    drawPath(segment, ZernoColors.Accent, style = Stroke(stroke, cap = StrokeCap.Round))
+                }
+            }
             .semantics { contentDescription = description }
             .tap(onClick = onClick),
         contentAlignment = Alignment.Center,

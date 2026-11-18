@@ -140,6 +140,8 @@ class CameraAdapter(private val activity: MainActivity) {
             chromaDenoise = prefs.getInt(KEY_CHROMA, 0).coerceIn(0, Settings.CHROMA_MAX),
             sharpness = prefs.getInt(KEY_SHARPNESS, 0).coerceIn(-Settings.ADJUST_RANGE, Settings.ADJUST_RANGE),
             raw = prefs.getString(PreferenceKeys.RawPreferenceKey, "preference_raw_no") != "preference_raw_no",
+            nightFrames = prefs.getInt(KEY_NIGHT_FRAMES, 0).takeIf { it in Settings.NIGHT_FRAMES } ?: 0,
+            ois = prefs.getBoolean(KEY_OIS, true),
             focusPeaking = prefs.getBoolean(KEY_PEAKING, true),
             qrEnabled = prefs.getBoolean(KEY_QR, true),
             shutterSound = prefs.getBoolean(PreferenceKeys.ShutterSoundPreferenceKey, true),
@@ -153,6 +155,8 @@ class CameraAdapter(private val activity: MainActivity) {
         applyImageAdjustment(settings)
         ZernoHooks.chroma_denoise = settings.chromaDenoise
         ZernoHooks.sharpness = settings.sharpness
+        ZernoHooks.night_frames = settings.nightFrames
+        ZernoHooks.ois_disabled = !settings.ois
 
         _state.update {
             it.copy(
@@ -280,6 +284,8 @@ class CameraAdapter(private val activity: MainActivity) {
             wbKelvinValues = kelvins,
             customWb = kelvins.isNotEmpty(),
             raw = preview.supportsRaw(),
+            ois = preview.supportsOpticalStabilization(),
+            pictureSizes = sizes.map { it.width to it.height }.distinct(),
             manualFocus = manualFocus,
             minFocusDistance = preview.minimumFocusDistance,
         )
@@ -544,6 +550,7 @@ class CameraAdapter(private val activity: MainActivity) {
         if (s.mode != Mode.NIGHT) add("detail=${s.detail.name.lowercase()}")
         add("chroma=${if (s.settings.chromaDenoise == 0) "off" else "${s.settings.chromaDenoise}/${Settings.CHROMA_MAX}"}")
         if (s.settings.sharpness != 0) add("sharpness=%+d".format(s.settings.sharpness))
+        if (s.mode == Mode.NIGHT && s.settings.nightFrames > 0) add("frames=${s.settings.nightFrames}")
         if (s.mode == Mode.PHOTO && s.hdr != Hdr.OFF) add("hdr=${s.hdr.name.lowercase()}")
         if (s.settings.brightness != 0 || s.settings.contrast != 0 || s.settings.saturation != 0) {
             add("adjust=brightness %+d, contrast %+d, saturation %+d".format(s.settings.brightness, s.settings.contrast, s.settings.saturation))
@@ -687,6 +694,29 @@ class CameraAdapter(private val activity: MainActivity) {
     fun setRaw(on: Boolean) {
         prefs.edit().putString(PreferenceKeys.RawPreferenceKey, if (on) "preference_raw_yes" else "preference_raw_no").apply()
         _state.update { it.copy(settings = it.settings.copy(raw = on)) }
+        updateEngine()
+    }
+
+    /** Frames in a Night burst (0 = automatic). Applies from the next photo. */
+    fun setNightFrames(frames: Int) {
+        val value = frames.takeIf { it in Settings.NIGHT_FRAMES } ?: 0
+        prefs.edit().putInt(KEY_NIGHT_FRAMES, value).apply()
+        ZernoHooks.night_frames = value
+        _state.update { it.copy(settings = it.settings.copy(nightFrames = value)) }
+    }
+
+    /** Optical image stabilisation on or off (off can help on a tripod). */
+    fun setOis(on: Boolean) {
+        prefs.edit().putBoolean(KEY_OIS, on).apply()
+        ZernoHooks.ois_disabled = !on
+        (controller as? CameraController2)?.zernoReapplyStabilization()
+        _state.update { it.copy(settings = it.settings.copy(ois = on)) }
+    }
+
+    /** Chooses a photo resolution (one of [Capabilities.pictureSizes]). */
+    fun setResolution(width: Int, height: Int) {
+        if (_state.value.takingPhoto) return
+        activity.applicationInterface.setCameraResolutionPref(width, height)
         updateEngine()
     }
 
@@ -1006,6 +1036,7 @@ class CameraAdapter(private val activity: MainActivity) {
                 flash = preview.currentFlashValue ?: Flash.OFF,
                 focusMode = preview.currentFocusValue ?: Focus.CONTINUOUS,
                 ratio = size?.let { sz -> Ratio.entries.firstOrNull { r -> abs(sz.width.toDouble() / sz.height - r.value) < 0.02 } },
+                pictureSize = size?.let { sz -> sz.width to sz.height },
                 pro = it.pro.copy(
                     exposureMode = exposureMode,
                     isoAuto = isoAuto,
@@ -1138,6 +1169,14 @@ class CameraAdapter(private val activity: MainActivity) {
             .remove(PreferenceKeys.ExposureTimePreferenceKey)
             .apply()
         updateEngine()
+    }
+
+    /** Steps the exposure compensation (long press and slide on the exposure button). */
+    fun stepEv(delta: Int) {
+        val s = _state.value
+        if (!s.caps.hasEv || s.pro.evLocked) return
+        val ev = (s.pro.ev + delta).coerceIn(s.caps.evMin, s.caps.evMax)
+        if (ev != s.pro.ev) setEv(ev)
     }
 
     fun setEv(ev: Int) {
@@ -1401,6 +1440,8 @@ class CameraAdapter(private val activity: MainActivity) {
         private const val KEY_SATURATION = "zerno_saturation"
         private const val KEY_QR = "zerno_qr"
         private const val KEY_SHARPNESS = "zerno_sharpness"
+        private const val KEY_NIGHT_FRAMES = "zerno_night_frames"
+        private const val KEY_OIS = "zerno_ois"
         private const val KEY_FOCUS_HINT_SHOWN = "zerno_focus_hint_shown"
         private const val FOCUS_HINT_MS = 3500L
         private const val KEY_PRIORITY = "zerno_exposure_priority"

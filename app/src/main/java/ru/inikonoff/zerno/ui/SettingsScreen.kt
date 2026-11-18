@@ -115,6 +115,30 @@ fun SettingsScreen(state: UiState, adapter: CameraAdapter) {
                 )
             }
 
+            val current = state.pictureSize
+            val sameRatio = state.caps.pictureSizes
+                .filter { (w, h) -> current != null && kotlin.math.abs(w.toDouble() / h - current.first.toDouble() / current.second) < 0.02 }
+                .sortedByDescending { (w, h) -> w.toLong() * h }
+            if (sameRatio.size > 1 && current != null) {
+                Section(stringResource(R.string.zerno_resolution)) {
+                    for ((w, h) in sameRatio) {
+                        val selected = w == current.first && h == current.second
+                        Row(
+                            Modifier.fillMaxWidth().height(44.dp).tap(role = Role.RadioButton) { adapter.setResolution(w, h) },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            BasicText(
+                                stringResource(R.string.zerno_resolution_item, "%.1f".format(w * h / 1e6), w, h),
+                                modifier = Modifier.weight(1f),
+                                style = Title.copy(color = if (selected) ZernoColors.Accent else Color.White),
+                            )
+                            if (selected) BasicText("●", style = TextStyle(color = ZernoColors.Accent, fontSize = 14.sp))
+                        }
+                    }
+                    BasicText(stringResource(R.string.zerno_resolution_hint), modifier = Modifier.padding(top = 6.dp), style = Hint)
+                }
+            }
+
             Section(stringResource(R.string.zerno_detail)) {
                 Segmented(
                     options = state.caps.details.map {
@@ -158,6 +182,9 @@ fun SettingsScreen(state: UiState, adapter: CameraAdapter) {
                 ToggleRow(stringResource(R.string.zerno_shutter_sound), settings.shutterSound, adapter::setShutterSound)
                 ToggleRow(stringResource(R.string.zerno_mirror_front), settings.mirrorFront, adapter::setMirrorFront)
                 ToggleRow(stringResource(R.string.zerno_geotag), settings.geotag, adapter::setGeotag)
+                if (state.caps.ois) {
+                    ToggleRow(stringResource(R.string.zerno_ois), settings.ois, adapter::setOis)
+                }
                 if (state.caps.raw) {
                     ToggleRow(stringResource(R.string.zerno_raw), settings.raw, adapter::setRaw)
                     BasicText(stringResource(R.string.zerno_raw_hint), modifier = Modifier.padding(bottom = 6.dp), style = Hint)

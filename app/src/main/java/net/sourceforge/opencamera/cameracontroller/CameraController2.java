@@ -4949,6 +4949,19 @@ public class CameraController2 extends CameraController {
         }
     }
 
+    /** Zerno: re-applies the optical stabilisation setting to the running preview. */
+    public void zernoReapplyStabilization() {
+        if( previewBuilder == null || sessionType == SessionType.SESSIONTYPE_EXTENSION )
+            return;
+        camera_settings.setStabilization(previewBuilder);
+        try {
+            setRepeatingRequest();
+        }
+        catch(CameraAccessException e) {
+            MyDebug.logStackTrace(TAG, "failed to reapply stabilization", e);
+        }
+    }
+
     /** Zerno: re-applies the white balance to the running preview (used when the grey-card
      *  gains in ZernoHooks.custom_wb_gains change).
      */
@@ -7133,7 +7146,11 @@ public class CameraController2 extends CameraController {
                     n_burst = 4;
                     n_burst_taken = 0;
 
-                    if( capture_result_has_iso && capture_result_has_exposure_time ) {
+                    if( net.sourceforge.opencamera.ZernoHooks.night_frames > 0 ) {
+                        // Zerno: the number of frames chosen by the user
+                        n_burst = net.sourceforge.opencamera.ZernoHooks.night_frames;
+                    }
+                    else if( capture_result_has_iso && capture_result_has_exposure_time ) {
                         if( HDRProcessor.sceneIsLowLight(capture_result_iso, capture_result_exposure_time) ) {
                             if( MyDebug.LOG )
                                 Log.d(TAG, "optimise for dark scene");

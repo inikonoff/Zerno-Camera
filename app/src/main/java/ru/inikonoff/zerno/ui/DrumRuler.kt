@@ -52,6 +52,11 @@ fun DrumRuler(
     /** In ticks mode: icons shown above the first and the last tick. */
     startIcon: ZernoIcon? = null,
     endIcon: ZernoIcon? = null,
+    /** In ticks mode: how long tick number n is (0 short, 1 medium, 2 long). By default every
+     *  fifth tick is medium and every tenth long. A label of a single space is an empty gap,
+     *  which the drum never comes to rest on.
+     */
+    tickSize: ((Int) -> Int)? = null,
 ) {
     val itemWidth = if (ticks) 7.dp else 60.dp
     BoxWithConstraints(modifier.fillMaxWidth().height(if (ticks) 64.dp else 52.dp)) {
@@ -76,6 +81,16 @@ fun DrumRuler(
                 .distinctUntilChanged()
                 .collect { (index, scrolling) ->
                     if (scrolling && index != currentSelected) currentOnSelect(index)
+                    if (!scrolling && labels.getOrNull(index) == GAP) {
+                        // came to rest in a gap: move to the nearest real item
+                        var before = index
+                        while (before > 0 && labels[before] == GAP) before--
+                        var after = index
+                        while (after < labels.lastIndex && labels[after] == GAP) after++
+                        val target = if (labels[before] != GAP && (index - before <= after - index || labels[after] == GAP)) before else after
+                        if (target != currentSelected) currentOnSelect(target)
+                        listState.animateScrollToItem(target)
+                    }
                 }
         }
         // the value changed from outside (e.g. taken over from the auto exposure)
@@ -104,9 +119,14 @@ fun DrumRuler(
                         // every fifth tick is longer, every tenth longer still; the first and the last
                         // ones (the ends of the scale) are always long
                         val n = i - tickOffset
-                        val length = when {
-                            n % 10 == 0 || i == labels.lastIndex -> 22.dp
-                            n % 5 == 0 -> 16.dp
+                        val level = if (n == 0 || i == labels.lastIndex) 2 else tickSize?.invoke(n) ?: when {
+                            n % 10 == 0 -> 2
+                            n % 5 == 0 -> 1
+                            else -> 0
+                        }
+                        val length = when (level) {
+                            2 -> 22.dp
+                            1 -> 16.dp
                             else -> 10.dp
                         }
                         val icon = when (i) {
@@ -151,3 +171,6 @@ fun DrumRuler(
         }
     }
 }
+
+/** An empty gap on a drum ruler (see [DrumRuler]). */
+const val GAP = " "

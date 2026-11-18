@@ -62,6 +62,14 @@ public final class ZernoHooks {
         }
     }
 
+    // ---- night mode, stabilisation ----
+
+    /** Frames in a Night burst: 0 = let the engine decide (3, 4 or 8, by how dark it is). */
+    public static volatile int night_frames;
+
+    /** Optical image stabilisation switched off by the user (only matters if the camera has it). */
+    public static volatile boolean ois_disabled;
+
     // ---- ISO / shutter priority ----
 
     /** While ISO or shutter priority is in use, the preview runs on the camera's auto exposure,

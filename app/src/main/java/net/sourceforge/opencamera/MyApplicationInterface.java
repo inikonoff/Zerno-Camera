@@ -1394,7 +1394,10 @@ public class MyApplicationInterface extends BasicApplicationInterface {
             }
             else if( main_activity.getPreview().supportsBurst() && this.isCameraBurstPref() ) {
                 if( this.getBurstForNoiseReduction() ) {
-                    if( this.getNRModePref() == ApplicationInterface.NRModePref.NRMODE_LOW_LIGHT ) {
+                    if( ZernoHooks.night_frames > 0 ) {
+                        n_jpegs = ZernoHooks.night_frames; // Zerno
+                    }
+                    else if( this.getNRModePref() == ApplicationInterface.NRModePref.NRMODE_LOW_LIGHT ) {
                         n_jpegs = CameraController.N_IMAGES_NR_DARK_LOW_LIGHT;
                     }
                     else {

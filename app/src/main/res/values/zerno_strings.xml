@@ -184,4 +184,10 @@
     <string name="zerno_raw_hint">Not in the Night and HDR modes. Colour noise, sharpness and adjustments are applied to the JPEG only.</string>
     <string name="zerno_info_sharpness">Sharpness</string>
     <string name="zerno_info_raw">RAW</string>
+    <string name="zerno_frames">Frames</string>
+    <string name="zerno_frames_auto">Auto</string>
+    <string name="zerno_resolution">Resolution</string>
+    <string name="zerno_resolution_item">%1$s MP · %2$d×%3$d</string>
+    <string name="zerno_resolution_hint">For the aspect ratio chosen on the camera screen. Changing the aspect ratio picks the largest size again.</string>
+    <string name="zerno_ois">Optical stabilisation</string>
 </resources>

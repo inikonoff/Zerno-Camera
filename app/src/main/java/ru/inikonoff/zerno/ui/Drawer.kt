@@ -40,6 +40,7 @@ import ru.inikonoff.zerno.adapter.Detail
 import ru.inikonoff.zerno.adapter.Hdr
 import ru.inikonoff.zerno.adapter.Mode
 import ru.inikonoff.zerno.adapter.Ratio
+import ru.inikonoff.zerno.adapter.Settings
 import ru.inikonoff.zerno.adapter.Timer
 import ru.inikonoff.zerno.adapter.UiState
 
@@ -68,7 +69,7 @@ fun DrawerHandle(open: Boolean, onClick: () -> Unit, modifier: Modifier = Modifi
     }
 }
 
-private enum class DrawerItem { DETAIL, HDR, RATIO, TIMER }
+private enum class DrawerItem { DETAIL, HDR, FRAMES, RATIO, TIMER }
 
 /** The drawer above the mode carousel: the switches that aren't needed all the time. */
 @Composable
@@ -76,9 +77,11 @@ fun Drawer(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifier
     var chooser by remember { mutableStateOf<DrawerItem?>(null) }
     val showHdr = state.mode == Mode.PHOTO && state.caps.hdrs.size > 1
     val showRatio = state.caps.ratios.isNotEmpty()
+    val showFrames = state.mode == Mode.NIGHT
     val open = chooser.takeIf {
         when (it) {
             DrawerItem.HDR -> showHdr
+            DrawerItem.FRAMES -> showFrames
             DrawerItem.RATIO -> showRatio
             else -> true
         }
@@ -99,6 +102,12 @@ fun Drawer(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifier
                     DrawerButton(stringResource(R.string.zerno_hdr), state.hdr != Hdr.OFF, { chooser = DrawerItem.HDR }) {
                         if (state.hdr == Hdr.DRO) Label("DRO", Modifier.upright(state.uiRotation), color = it, size = 11.sp, weight = FontWeight.Bold)
                         else ZIcon(ZernoIcon.HDR, it, Modifier.size(22.dp).upright(state.uiRotation))
+                    }
+                }
+                if (showFrames) {
+                    val frames = state.settings.nightFrames
+                    DrawerButton(stringResource(R.string.zerno_frames), frames != 0, { chooser = DrawerItem.FRAMES }) {
+                        Label(if (frames == 0) stringResource(R.string.zerno_auto_short) else "$frames", Modifier.upright(state.uiRotation), color = it, size = 14.sp, weight = FontWeight.Bold)
                     }
                 }
                 if (showRatio) {
@@ -139,6 +148,12 @@ fun Drawer(state: UiState, adapter: CameraAdapter, modifier: Modifier = Modifier
                 selected = state.hdr,
                 onClose = { chooser = null },
             ) { adapter.setHdr(it); chooser = null }
+            DrawerItem.FRAMES -> ChoiceRow(
+                title = stringResource(R.string.zerno_frames),
+                options = Settings.NIGHT_FRAMES.map { it to if (it == 0) stringResource(R.string.zerno_frames_auto) else "$it" },
+                selected = state.settings.nightFrames,
+                onClose = { chooser = null },
+            ) { adapter.setNightFrames(it); chooser = null }
             DrawerItem.RATIO -> ChoiceRow(
                 title = stringResource(R.string.zerno_ratio),
                 options = state.caps.ratios.map<Ratio, Pair<Ratio?, String>> { it to it.label },

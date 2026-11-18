@@ -708,7 +708,7 @@ public class Camera2Settings {
 
         builder.set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, video_stabilization ? CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON : CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF);
         if( camera_controller.supportsOpticalStabilization() ) {
-            if( video_stabilization ) {
+            if( video_stabilization || net.sourceforge.opencamera.ZernoHooks.ois_disabled ) { // Zerno: the user can switch OIS off (e.g. on a tripod)
                 // should also disable OIS
                 if( default_optical_stabilization == null ) {
                     // save the default optical_stabilization

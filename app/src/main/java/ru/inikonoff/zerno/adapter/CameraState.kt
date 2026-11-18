@@ -31,6 +31,10 @@ data class Settings(
     val sharpness: Int = 0,
     /** Save a RAW (DNG) file next to each JPEG, if the camera can. */
     val raw: Boolean = false,
+    /** Frames in a Night burst; 0 = automatic (by how dark the scene is). */
+    val nightFrames: Int = 0,
+    /** Optical image stabilisation (only offered if the camera has it). */
+    val ois: Boolean = true,
     /** Colour noise removal: 0 (off) to [CHROMA_MAX]. */
     val chromaDenoise: Int = 0,
     val qrEnabled: Boolean = true,
@@ -48,6 +52,7 @@ data class Settings(
     companion object {
         const val ADJUST_RANGE = 5
         const val CHROMA_MAX = 3
+        val NIGHT_FRAMES = listOf(0, 4, 8, 16, 32)
         val JPEG_QUALITIES = listOf(85, 90, 95, 100)
         /** The volume key actions offered (engine values): shutter, zoom, exposure, device volume. */
         val VOLUME_KEY_ACTIONS = listOf("volume_take_photo", "volume_zoom", "volume_exposure", "volume_nothing")
@@ -85,6 +90,10 @@ data class Capabilities(
     val hdrs: List<Hdr> = listOf(Hdr.OFF),
     val flashes: List<String> = emptyList(), // engine flash values, see [Flash]
     val ratios: List<Ratio> = emptyList(),
+    /** All photo resolutions the camera offers in the current mode (width, height). */
+    val pictureSizes: List<Pair<Int, Int>> = emptyList(),
+    /** The camera has optical image stabilisation. */
+    val ois: Boolean = false,
     val focusModes: List<String> = emptyList(), // engine focus values, see [Focus]
     val canSwitchCamera: Boolean = false,
     val hasZoom: Boolean = false,
@@ -154,6 +163,8 @@ data class UiState(
     val timer: Timer = Timer.OFF,
     val flash: String = Flash.OFF,
     val ratio: Ratio? = null,
+    /** The photo resolution in use (width, height). */
+    val pictureSize: Pair<Int, Int>? = null,
     val focusMode: String = Focus.CONTINUOUS,
     /** A QR code currently (or very recently) seen by the camera, if any. */
     val qr: QrContent? = null,

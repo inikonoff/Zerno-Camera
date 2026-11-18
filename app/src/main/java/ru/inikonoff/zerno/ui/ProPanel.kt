@@ -33,6 +33,19 @@ import ru.inikonoff.zerno.adapter.UiState
 
 enum class ProParam(val title: String) { M("M"), ISO("ISO"), S("S"), EV("EV"), WB("WB"), MF("MF") }
 
+/** On tick drums, "A" (automatic) is followed by a gap, so it stands apart from the scale. */
+private val AUTO_GAP = listOf(GAP, GAP, GAP)
+private const val FIRST_TICK = 4
+
+/** Whether a value is a whole number of stops from 1 (e.g. ISO 100, 200, 400 relative to 100, or
+ *  1/125, 1/60, 1/30 s - which are nominally 1/128, 1/64, 1/32).
+ */
+private fun isFullStop(value: Double): Boolean {
+    if (value <= 0.0) return false
+    val stops = kotlin.math.ln(value) / kotlin.math.ln(2.0)
+    return kotlin.math.abs(stops - kotlin.math.round(stops)) < 0.1
+}
+
 private fun meteringIcon(m: Metering) = when (m) {
     Metering.SPOT -> ZernoIcon.METERING_SPOT
     Metering.CENTRE -> ZernoIcon.METERING_CENTRE
@@ -70,7 +83,6 @@ fun ProPanel(
         if (caps.manualFocus) add(ProParam.MF)
     }
     val open = selected.takeIf { it in params }
-    val auto = stringResource(R.string.zerno_auto)
     val autoShort = stringResource(R.string.zerno_auto_short)
 
     Column(modifier.fillMaxWidth()) {
@@ -128,15 +140,22 @@ fun ProPanel(
                 icon = ::meteringIcon,
                 onSelect = adapter::setMetering,
             )
+            // ISO and shutter speed: tick marks only, the value is shown in the row above
             ProParam.ISO -> DrumRuler(
-                labels = listOf(auto) + caps.isoValues.map { it.toString() },
-                selectedIndex = if (pro.isoAuto) 0 else 1 + Scales.nearestLogIndex(caps.isoValues, pro.iso),
-                onSelect = { adapter.setIso(if (it == 0) null else caps.isoValues[it - 1]) },
+                labels = listOf(autoShort) + AUTO_GAP + caps.isoValues.map { "" },
+                selectedIndex = if (pro.isoAuto) 0 else FIRST_TICK + Scales.nearestLogIndex(caps.isoValues, pro.iso),
+                onSelect = { adapter.setIso(if (it < FIRST_TICK) null else caps.isoValues[it - FIRST_TICK]) },
+                ticks = true,
+                tickOffset = FIRST_TICK,
+                tickSize = { n -> if (isFullStop(caps.isoValues[n] / 100.0)) 2 else 0 },
             )
             ProParam.S -> DrumRuler(
-                labels = listOf(auto) + caps.shutterValues.map { Scales.formatShutter(it) },
-                selectedIndex = if (pro.shutterAuto) 0 else 1 + Scales.nearestLogIndex(caps.shutterValues, pro.shutterNs),
-                onSelect = { adapter.setShutter(if (it == 0) null else caps.shutterValues[it - 1]) },
+                labels = listOf(autoShort) + AUTO_GAP + caps.shutterValues.map { "" },
+                selectedIndex = if (pro.shutterAuto) 0 else FIRST_TICK + Scales.nearestLogIndex(caps.shutterValues, pro.shutterNs),
+                onSelect = { adapter.setShutter(if (it < FIRST_TICK) null else caps.shutterValues[it - FIRST_TICK]) },
+                ticks = true,
+                tickOffset = FIRST_TICK,
+                tickSize = { n -> if (isFullStop(caps.shutterValues[n] / 1e9)) 2 else 0 },
             )
             ProParam.EV -> if (pro.evLocked) {
                 Box(Modifier.fillMaxWidth().height(52.dp), contentAlignment = Alignment.Center) {
@@ -168,11 +187,11 @@ fun ProPanel(
             }
             ProParam.MF -> DrumRuler(
                 // only tick marks: the distances the camera reports for manual focus are not reliable
-                labels = listOf(autoShort) + (0..Scales.FOCUS_STEPS).map { "" },
-                selectedIndex = if (pro.focusAuto) 0 else 1 + Scales.focusIndexOf(pro.focusDistance, caps.minFocusDistance),
-                onSelect = { adapter.setFocusDistance(if (it == 0) null else Scales.focusDistanceAt(it - 1, caps.minFocusDistance)) },
+                labels = listOf(autoShort) + AUTO_GAP + (0..Scales.FOCUS_STEPS).map { "" },
+                selectedIndex = if (pro.focusAuto) 0 else FIRST_TICK + Scales.focusIndexOf(pro.focusDistance, caps.minFocusDistance),
+                onSelect = { adapter.setFocusDistance(if (it < FIRST_TICK) null else Scales.focusDistanceAt(it - FIRST_TICK, caps.minFocusDistance)) },
                 ticks = true,
-                tickOffset = 1, // the "A" comes first
+                tickOffset = FIRST_TICK, // the "A" and a gap come first
                 startIcon = ZernoIcon.MOUNTAINS, // infinity
                 endIcon = ZernoIcon.FLOWER, // the closest focus distance
             )
