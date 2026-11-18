@@ -110,6 +110,10 @@ fun ShutterRow(
             active = focusOpen || state.focusMode != Focus.CONTINUOUS,
             onClick = onFocus,
             onDoubleClick = { adapter.setFocusMode(Focus.CONTINUOUS) }, // a double tap goes back to AF-C
+            // press, hold and slide: manual focus, to infinity on the left and to macro on the right
+            onLongDrag = if (state.caps.manualFocus) adapter::stepFocus else null,
+            dragStep = 7.dp,
+            hapticEvery = 4,
         ) { tint ->
             Label(focusShortName(state.focusMode), Modifier.upright(state.uiRotation), color = tint, size = 12.sp, weight = FontWeight.Bold)
         }
@@ -141,6 +145,10 @@ private fun SideButton(
     onDoubleClick: (() -> Unit)? = null,
     /** Long press, then slide: called with +1 / -1 for each step to the right / left. */
     onLongDrag: ((Int) -> Unit)? = null,
+    /** How far the finger slides for one step. */
+    dragStep: androidx.compose.ui.unit.Dp = 14.dp,
+    /** A tick of vibration every this many steps. */
+    hapticEvery: Int = 1,
     content: @Composable (tint: Color) -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
@@ -160,8 +168,9 @@ private fun SideButton(
             .then(
                 if (!visible || onLongDrag == null) Modifier
                 else Modifier.pointerInput(Unit) {
-                    val step = 14.dp.toPx()
+                    val step = dragStep.toPx()
                     var travel = 0f
+                    var steps = 0
                     detectDragGesturesAfterLongPress(
                         onDragStart = {
                             travel = 0f
@@ -173,12 +182,12 @@ private fun SideButton(
                         while (travel >= step) {
                             travel -= step
                             currentDrag?.invoke(1)
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            if (++steps % hapticEvery == 0) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         }
                         while (travel <= -step) {
                             travel += step
                             currentDrag?.invoke(-1)
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            if (++steps % hapticEvery == 0) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         }
                     }
                 }

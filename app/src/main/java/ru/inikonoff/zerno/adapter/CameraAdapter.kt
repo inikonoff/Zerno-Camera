@@ -1389,6 +1389,19 @@ class CameraAdapter(private val activity: MainActivity) {
         refreshPro()
     }
 
+    /** Moves the manual focus by [delta] steps of the focus ruler (+1 towards macro, -1 towards
+     *  infinity). From autofocus it starts at the distance the camera is focused at now. This is
+     *  what a long press and slide on the focus button does, without opening the ruler.
+     */
+    fun stepFocus(delta: Int) {
+        val s = _state.value
+        if (!s.caps.manualFocus || controller == null) return
+        val current = if (s.focusMode == Focus.MANUAL) s.pro.focusDistance
+        else controller?.takeIf { it.captureResultHasFocusDistance() }?.captureResultFocusDistance() ?: 0f
+        val index = (Scales.focusIndexOf(current, s.caps.minFocusDistance) + delta).coerceIn(0, Scales.FOCUS_STEPS)
+        setFocusDistance(Scales.focusDistanceAt(index, s.caps.minFocusDistance))
+    }
+
     /** [manual]: whether manual focus is in use; the highlighting is only shown then, and only
      *  if it's switched on in the settings (it costs some preview smoothness).
      */
