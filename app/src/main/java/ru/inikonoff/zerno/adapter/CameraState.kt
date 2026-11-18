@@ -33,6 +33,12 @@ data class Settings(
     val raw: Boolean = false,
     /** Frames in a Night burst; 0 = automatic (by how dark the scene is). */
     val nightFrames: Int = 0,
+    /** Night median filter: 0 off, 1 weak, 2 standard (engine). */
+    val nightMedian: Int = 2,
+    /** Night merge: strict tolerance keeps detail that moved or misaligned slightly. */
+    val nightStrict: Boolean = false,
+    /** Night tone: natural = no histogram redistribution after the merge. */
+    val nightNaturalTone: Boolean = false,
     /** Optical image stabilisation (only offered if the camera has it). */
     val ois: Boolean = true,
     /** Colour noise removal: 0 (off) to [CHROMA_MAX]. */

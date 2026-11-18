@@ -190,4 +190,15 @@
     <string name="zerno_resolution_hint">Для формата, выбранного на экране камеры. При смене формата снова берётся наибольшее разрешение.</string>
     <string name="zerno_ois">Оптическая стабилизация</string>
     <string name="zerno_info_frames">Кадров</string>
+    <string name="zerno_night_tuning">Ночь: тонкая настройка</string>
+    <string name="zerno_night_median">Медиана</string>
+    <string name="zerno_night_median_off">Выкл</string>
+    <string name="zerno_night_median_weak">Слабая</string>
+    <string name="zerno_night_standard">Стандарт</string>
+    <string name="zerno_night_merge">Склейка кадров</string>
+    <string name="zerno_night_merge_strict">Строгая</string>
+    <string name="zerno_night_tone">Тон</string>
+    <string name="zerno_night_tone_natural">Естественный</string>
+    <string name="zerno_night_tone_engine">Как у движка</string>
+    <string name="zerno_night_tuning_hint">Медиана сглаживает яркостные точки, но делает мелкую фактуру «масляной». Строгая склейка усредняет только хорошо совпавшие кадры: деталь сохраняется, шума остаётся больше. Естественный тон отключает перераспределение контраста после склейки. Действует со следующего ночного снимка.</string>
 </resources>

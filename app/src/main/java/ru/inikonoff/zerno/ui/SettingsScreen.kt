@@ -178,6 +178,39 @@ fun SettingsScreen(state: UiState, adapter: CameraAdapter) {
                 BasicText(stringResource(R.string.zerno_detail_hint), modifier = Modifier.padding(top = 10.dp), style = Hint)
             }
 
+            Section(stringResource(R.string.zerno_night_tuning)) {
+                val label = TextStyle(color = Color.White, fontSize = 14.sp)
+                BasicText(stringResource(R.string.zerno_night_median), modifier = Modifier.padding(bottom = 6.dp), style = label)
+                Segmented(
+                    options = listOf(
+                        0 to stringResource(R.string.zerno_night_median_off),
+                        1 to stringResource(R.string.zerno_night_median_weak),
+                        2 to stringResource(R.string.zerno_night_standard),
+                    ),
+                    selected = settings.nightMedian,
+                    onSelect = adapter::setNightMedian,
+                )
+                BasicText(stringResource(R.string.zerno_night_merge), modifier = Modifier.padding(top = 12.dp, bottom = 6.dp), style = label)
+                Segmented(
+                    options = listOf(
+                        true to stringResource(R.string.zerno_night_merge_strict),
+                        false to stringResource(R.string.zerno_night_standard),
+                    ),
+                    selected = settings.nightStrict,
+                    onSelect = adapter::setNightStrict,
+                )
+                BasicText(stringResource(R.string.zerno_night_tone), modifier = Modifier.padding(top = 12.dp, bottom = 6.dp), style = label)
+                Segmented(
+                    options = listOf(
+                        true to stringResource(R.string.zerno_night_tone_natural),
+                        false to stringResource(R.string.zerno_night_tone_engine),
+                    ),
+                    selected = settings.nightNaturalTone,
+                    onSelect = adapter::setNightNaturalTone,
+                )
+                BasicText(stringResource(R.string.zerno_night_tuning_hint), modifier = Modifier.padding(top = 10.dp), style = Hint)
+            }
+
             Section(stringResource(R.string.zerno_image)) {
                 Adjustment(stringResource(R.string.zerno_brightness), settings.brightness) {
                     adapter.setImageAdjustment(it, settings.contrast, settings.saturation)

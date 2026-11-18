@@ -142,6 +142,9 @@ class CameraAdapter(private val activity: MainActivity) {
             raw = prefs.getString(PreferenceKeys.RawPreferenceKey, "preference_raw_no") != "preference_raw_no",
             nightFrames = prefs.getInt(KEY_NIGHT_FRAMES, 0).takeIf { it in Settings.NIGHT_FRAMES } ?: 0,
             ois = prefs.getBoolean(KEY_OIS, true),
+            nightMedian = prefs.getInt(KEY_NIGHT_MEDIAN, 2).coerceIn(0, 2),
+            nightStrict = prefs.getBoolean(KEY_NIGHT_STRICT, false),
+            nightNaturalTone = prefs.getBoolean(KEY_NIGHT_NATURAL, false),
             focusPeaking = prefs.getBoolean(KEY_PEAKING, true),
             qrEnabled = prefs.getBoolean(KEY_QR, true),
             shutterSound = prefs.getBoolean(PreferenceKeys.ShutterSoundPreferenceKey, true),
@@ -156,6 +159,9 @@ class CameraAdapter(private val activity: MainActivity) {
         ZernoHooks.chroma_denoise = settings.chromaDenoise
         ZernoHooks.sharpness = settings.sharpness
         ZernoHooks.night_frames = settings.nightFrames
+        ZernoHooks.night_median = settings.nightMedian
+        ZernoHooks.night_strict = settings.nightStrict
+        ZernoHooks.night_natural_tone = settings.nightNaturalTone
         ZernoHooks.ois_disabled = !settings.ois
 
         _state.update {
@@ -551,6 +557,9 @@ class CameraAdapter(private val activity: MainActivity) {
         add("chroma=${if (s.settings.chromaDenoise == 0) "off" else "${s.settings.chromaDenoise}/${Settings.CHROMA_MAX}"}")
         if (s.settings.sharpness != 0) add("sharpness=%+d".format(s.settings.sharpness))
         if (s.mode == Mode.NIGHT && s.settings.nightFrames > 0) add("frames=${s.settings.nightFrames}")
+        if (s.mode == Mode.NIGHT && s.settings.nightMedian != 2) add("median=${if (s.settings.nightMedian == 0) "off" else "weak"}")
+        if (s.mode == Mode.NIGHT && s.settings.nightStrict) add("merge=strict")
+        if (s.mode == Mode.NIGHT && s.settings.nightNaturalTone) add("tone=natural")
         if (s.mode == Mode.PHOTO && s.hdr != Hdr.OFF) add("hdr=${s.hdr.name.lowercase()}")
         if (s.settings.brightness != 0 || s.settings.contrast != 0 || s.settings.saturation != 0) {
             add("adjust=brightness %+d, contrast %+d, saturation %+d".format(s.settings.brightness, s.settings.contrast, s.settings.saturation))
@@ -703,6 +712,28 @@ class CameraAdapter(private val activity: MainActivity) {
         prefs.edit().putInt(KEY_NIGHT_FRAMES, value).apply()
         ZernoHooks.night_frames = value
         _state.update { it.copy(settings = it.settings.copy(nightFrames = value)) }
+    }
+
+    /** Night median filter strength: 0 off, 1 weak, 2 standard. */
+    fun setNightMedian(level: Int) {
+        val value = level.coerceIn(0, 2)
+        prefs.edit().putInt(KEY_NIGHT_MEDIAN, value).apply()
+        ZernoHooks.night_median = value
+        _state.update { it.copy(settings = it.settings.copy(nightMedian = value)) }
+    }
+
+    /** Night merge tolerance: strict or engine standard. */
+    fun setNightStrict(on: Boolean) {
+        prefs.edit().putBoolean(KEY_NIGHT_STRICT, on).apply()
+        ZernoHooks.night_strict = on
+        _state.update { it.copy(settings = it.settings.copy(nightStrict = on)) }
+    }
+
+    /** Night tone: natural (no histogram redistribution) or engine. */
+    fun setNightNaturalTone(on: Boolean) {
+        prefs.edit().putBoolean(KEY_NIGHT_NATURAL, on).apply()
+        ZernoHooks.night_natural_tone = on
+        _state.update { it.copy(settings = it.settings.copy(nightNaturalTone = on)) }
     }
 
     /** Optical image stabilisation on or off (off can help on a tripod). */
@@ -1454,6 +1485,9 @@ class CameraAdapter(private val activity: MainActivity) {
         private const val KEY_QR = "zerno_qr"
         private const val KEY_SHARPNESS = "zerno_sharpness"
         private const val KEY_NIGHT_FRAMES = "zerno_night_frames"
+        private const val KEY_NIGHT_MEDIAN = "zerno_night_median"
+        private const val KEY_NIGHT_STRICT = "zerno_night_strict"
+        private const val KEY_NIGHT_NATURAL = "zerno_night_natural_tone"
         private const val KEY_OIS = "zerno_ois"
         private const val KEY_FOCUS_HINT_SHOWN = "zerno_focus_hint_shown"
         private const val FOCUS_HINT_MS = 3500L

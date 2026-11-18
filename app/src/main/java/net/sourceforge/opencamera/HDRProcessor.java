@@ -1155,7 +1155,7 @@ public class HDRProcessor {
             }
         }
         limited_iso = Math.max(limited_iso, 100);
-        float wiener_C = 10.0f * limited_iso;
+        float wiener_C = 10.0f * limited_iso * ZernoHooks.nightWienerScale(); // Zerno: strict merge option
         //float wiener_C = 1000.0f;
         //float wiener_C = 4000.0f;
 
@@ -2309,7 +2309,7 @@ public class HDRProcessor {
         float black_level = computeBlackLevel(histogramInfo, histo, iso);
 
         // use a lower medial filter strength for pixel binned images, so that we don't blur testAvg46 so much (especially sign text)
-        float median_filter_strength = (cached_avg_sample_size >= 2) ? 0.5f : 1.0f;
+        float median_filter_strength = ((cached_avg_sample_size >= 2) ? 0.5f : 1.0f) * ZernoHooks.nightMedianFactor(); // Zerno: median option
         if( MyDebug.LOG )
             Log.d(TAG, "median_filter_strength: " + median_filter_strength);
 
@@ -2321,7 +2321,7 @@ public class HDRProcessor {
             Log.d(TAG, "### time after AvgBrightenApplyFunction: " + (System.currentTimeMillis() - time_s));
 
         //if( iso <= 150 ) {
-        if( iso < 1100 && exposure_time < 1000000000L/59 ) {
+        if( iso < 1100 && exposure_time < 1000000000L/59 && !( ZernoHooks.ZERNO_UI && ZernoHooks.night_natural_tone ) ) { // Zerno: natural tone option
             // for bright scenes, contrast enhancement helps improve the quality of images (especially where we may have both
             // dark and bright regions, e.g., testAvg12); but for dark scenes, it just blows up the noise too much
             // keep n_tiles==1 - get too much contrast enhancement with n_tiles==4 e.g. for testAvg34

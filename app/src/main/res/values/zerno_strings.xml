@@ -191,4 +191,15 @@
     <string name="zerno_resolution_hint">For the aspect ratio chosen on the camera screen. Changing the aspect ratio picks the largest size again.</string>
     <string name="zerno_ois">Optical stabilisation</string>
     <string name="zerno_info_frames">Frames</string>
+    <string name="zerno_night_tuning">Night: fine tuning</string>
+    <string name="zerno_night_median">Median filter</string>
+    <string name="zerno_night_median_off">Off</string>
+    <string name="zerno_night_median_weak">Weak</string>
+    <string name="zerno_night_standard">Standard</string>
+    <string name="zerno_night_merge">Frame merge</string>
+    <string name="zerno_night_merge_strict">Strict</string>
+    <string name="zerno_night_tone">Tone</string>
+    <string name="zerno_night_tone_natural">Natural</string>
+    <string name="zerno_night_tone_engine">Engine</string>
+    <string name="zerno_night_tuning_hint">Median smooths luminance speckles but makes fine texture look oily. Strict merge averages only frames that match closely, so detail is kept but more noise remains. Natural tone skips the engine\'s contrast redistribution after merging. Applies from the next Night photo.</string>
 </resources>

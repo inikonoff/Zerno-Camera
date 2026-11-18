@@ -66,6 +66,26 @@ public final class ZernoHooks {
 
     /** Frames in a Night burst: 0 = let the engine decide (3, 4 or 8, by how dark it is). */
     public static volatile int night_frames;
+    /** Zerno: Night tuning. Median: 0 off, 1 weak, 2 engine default. */
+    public static volatile int night_median = 2;
+    /** Zerno: stricter merge tolerance (Wiener C quartered) so moving/misaligned detail is not averaged away. */
+    public static volatile boolean night_strict;
+    /** Zerno: skip the engine's histogram redistribution after the merge. */
+    public static volatile boolean night_natural_tone;
+
+    public static float nightMedianFactor() {
+        if( !ZERNO_UI )
+            return 1.0f;
+        switch( night_median ) {
+            case 0: return 0.0f;
+            case 1: return 0.4f;
+            default: return 1.0f;
+        }
+    }
+
+    public static float nightWienerScale() {
+        return ( ZERNO_UI && night_strict ) ? 0.25f : 1.0f;
+    }
 
     /** Optical image stabilisation switched off by the user (only matters if the camera has it). */
     public static volatile boolean ois_disabled;
