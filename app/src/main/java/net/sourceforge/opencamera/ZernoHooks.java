@@ -177,9 +177,6 @@ public final class ZernoHooks {
     /** Sharpness applied to every saved photo: -5 (soft) to +5 (sharp); 0 = none. */
     public static volatile int sharpness;
 
-    /** Film grain added to every saved photo: 0 (none) to 3 (strong). */
-    public static volatile int grain;
-
     /** Applies the colour noise removal and color_matrix to the photo. If there is nothing to
      *  do, returns the supplied bitmap (which may be null, meaning that the JPEG data is saved
      *  untouched). Works in place, in bands, so that no second full-size bitmap is needed.
@@ -188,8 +185,7 @@ public final class ZernoHooks {
         final float [] matrix = color_matrix;
         final int chroma_level = chroma_denoise;
         final int sharp_level = sharpness;
-        final int grain_level = grain;
-        if( !ZERNO_UI || ( matrix == null && chroma_level <= 0 && sharp_level == 0 && grain_level <= 0 ) )
+        if( !ZERNO_UI || ( matrix == null && chroma_level <= 0 && sharp_level == 0 ) )
             return bitmap;
         try {
             if( bitmap == null ) {
@@ -237,17 +233,6 @@ public final class ZernoHooks {
                     if( band != bitmap )
                         band.recycle();
                 }
-            }
-            if( grain_level > 0 ) {
-                // last of all, so that the grain isn't changed by the other adjustments
-                final ZernoGrain grain_filter = new ZernoGrain(grain_level);
-                final int w = width;
-                runInBands(bitmap, 128, true, new BandTask() {
-                    @Override
-                    public void run(int [] pixels, int y, int rows) {
-                        grain_filter.apply(pixels, y, rows, w);
-                    }
-                });
             }
         }
         catch(RuntimeException | OutOfMemoryError e) {

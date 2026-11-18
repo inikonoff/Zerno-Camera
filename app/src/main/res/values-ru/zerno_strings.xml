@@ -94,7 +94,7 @@
     <string name="zerno_brightness">Яркость</string>
     <string name="zerno_contrast">Контраст</string>
     <string name="zerno_saturation">Насыщенность</string>
-    <string name="zerno_image_hint">Яркость, контраст и насыщенность видны на превью. Резкость и зерно, как и всё остальное здесь, применяются при сохранении снимка; файлы RAW не меняются.</string>
+    <string name="zerno_image_hint">Яркость, контраст и насыщенность видны на превью. Резкость и всё остальное здесь применяются при сохранении снимка; файлы RAW не меняются.</string>
     <string name="zerno_reset">Сбросить</string>
     <string name="zerno_shooting">Съёмка</string>
     <string name="zerno_qr_setting">Читать QR-коды</string>
@@ -189,7 +189,5 @@
     <string name="zerno_resolution_item">%1$s Мп · %2$d×%3$d</string>
     <string name="zerno_resolution_hint">Для формата, выбранного на экране камеры. При смене формата снова берётся наибольшее разрешение.</string>
     <string name="zerno_ois">Оптическая стабилизация</string>
-    <string name="zerno_grain">Плёночное зерно</string>
-    <string name="zerno_info_grain">Зерно</string>
     <string name="zerno_info_frames">Кадров</string>
 </resources>

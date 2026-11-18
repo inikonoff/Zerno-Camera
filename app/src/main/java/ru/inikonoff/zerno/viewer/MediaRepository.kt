@@ -271,7 +271,6 @@ class MediaRepository(private val context: Context, folderPath: String) {
             "detail" to R.string.zerno_info_detail,
             "chroma" to R.string.zerno_info_chroma,
             "sharpness" to R.string.zerno_info_sharpness,
-            "grain" to R.string.zerno_info_grain,
             "frames" to R.string.zerno_info_frames,
             "hdr" to R.string.zerno_info_hdr,
             "shadows" to R.string.zerno_info_shadows,

@@ -29,8 +29,6 @@ data class Settings(
     val saturation: Int = 0,
     /** Sharpness: -5 (soft) to +5 (sharp). */
     val sharpness: Int = 0,
-    /** Film grain: 0 (off) to [GRAIN_MAX]. */
-    val grain: Int = 0,
     /** Save a RAW (DNG) file next to each JPEG, if the camera can. */
     val raw: Boolean = false,
     /** Frames in a Night burst; 0 = automatic (by how dark the scene is). */
@@ -54,7 +52,6 @@ data class Settings(
     companion object {
         const val ADJUST_RANGE = 5
         const val CHROMA_MAX = 3
-        const val GRAIN_MAX = 3
         val NIGHT_FRAMES = listOf(0, 4, 8, 16, 32)
         val JPEG_QUALITIES = listOf(85, 90, 95, 100)
         /** The volume key actions offered (engine values): shutter, zoom, exposure, device volume. */

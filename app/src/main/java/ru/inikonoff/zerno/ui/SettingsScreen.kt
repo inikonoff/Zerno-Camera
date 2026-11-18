@@ -29,6 +29,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
@@ -120,22 +123,40 @@ fun SettingsScreen(state: UiState, adapter: CameraAdapter) {
                 .filter { (w, h) -> current != null && kotlin.math.abs(w.toDouble() / h - current.first.toDouble() / current.second) < 0.02 }
                 .sortedByDescending { (w, h) -> w.toLong() * h }
             if (sameRatio.size > 1 && current != null) {
+                var resolutionOpen by remember { mutableStateOf(false) }
                 Section(stringResource(R.string.zerno_resolution)) {
-                    for ((w, h) in sameRatio) {
-                        val selected = w == current.first && h == current.second
-                        Row(
-                            Modifier.fillMaxWidth().height(44.dp).tap(role = Role.RadioButton) { adapter.setResolution(w, h) },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            BasicText(
-                                stringResource(R.string.zerno_resolution_item, "%.1f".format(w * h / 1e6), w, h),
-                                modifier = Modifier.weight(1f),
-                                style = Title.copy(color = if (selected) ZernoColors.Accent else Color.White),
-                            )
-                            if (selected) BasicText("●", style = TextStyle(color = ZernoColors.Accent, fontSize = 14.sp))
-                        }
+                    // the current size; tapping it opens the list of the others
+                    Row(
+                        Modifier.fillMaxWidth().height(44.dp).tap(role = Role.DropdownList) { resolutionOpen = !resolutionOpen },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        BasicText(
+                            stringResource(R.string.zerno_resolution_item, "%.1f".format(current.first * current.second / 1e6), current.first, current.second),
+                            modifier = Modifier.weight(1f),
+                            style = Title,
+                        )
+                        BasicText(if (resolutionOpen) "▴" else "▾", style = TextStyle(color = Color(0x99FFFFFF), fontSize = 18.sp))
                     }
-                    BasicText(stringResource(R.string.zerno_resolution_hint), modifier = Modifier.padding(top = 6.dp), style = Hint)
+                    if (resolutionOpen) {
+                        for ((w, h) in sameRatio) {
+                            val selected = w == current.first && h == current.second
+                            Row(
+                                Modifier.fillMaxWidth().height(42.dp).tap(role = Role.RadioButton) {
+                                    adapter.setResolution(w, h)
+                                    resolutionOpen = false
+                                },
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                BasicText(
+                                    stringResource(R.string.zerno_resolution_item, "%.1f".format(w * h / 1e6), w, h),
+                                    modifier = Modifier.weight(1f).padding(start = 12.dp),
+                                    style = Title.copy(color = if (selected) ZernoColors.Accent else Color(0xCCFFFFFF), fontSize = 15.sp),
+                                )
+                                if (selected) BasicText("●", style = TextStyle(color = ZernoColors.Accent, fontSize = 14.sp))
+                            }
+                        }
+                        BasicText(stringResource(R.string.zerno_resolution_hint), modifier = Modifier.padding(top = 6.dp), style = Hint)
+                    }
                 }
             }
 
@@ -168,22 +189,11 @@ fun SettingsScreen(state: UiState, adapter: CameraAdapter) {
                     adapter.setImageAdjustment(settings.brightness, settings.contrast, it)
                 }
                 Adjustment(stringResource(R.string.zerno_sharpness), settings.sharpness, adapter::setSharpness)
-                BasicText(stringResource(R.string.zerno_grain), modifier = Modifier.padding(top = 8.dp, bottom = 6.dp), style = Title)
-                Segmented(
-                    options = listOf(
-                        0 to stringResource(R.string.zerno_chroma_off),
-                        1 to stringResource(R.string.zerno_chroma_light),
-                        2 to stringResource(R.string.zerno_chroma_medium),
-                        3 to stringResource(R.string.zerno_chroma_strong),
-                    ),
-                    selected = settings.grain,
-                    onSelect = adapter::setGrain,
-                )
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     BasicText(stringResource(R.string.zerno_image_hint), modifier = Modifier.weight(1f), style = Hint)
-                    if (settings.brightness != 0 || settings.contrast != 0 || settings.saturation != 0 || settings.sharpness != 0 || settings.grain != 0) {
+                    if (settings.brightness != 0 || settings.contrast != 0 || settings.saturation != 0 || settings.sharpness != 0) {
                         Spacer(Modifier.width(10.dp))
-                        Pill(stringResource(R.string.zerno_reset), selected = false) { adapter.setImageAdjustment(0, 0, 0); adapter.setSharpness(0); adapter.setGrain(0) }
+                        Pill(stringResource(R.string.zerno_reset), selected = false) { adapter.setImageAdjustment(0, 0, 0); adapter.setSharpness(0) }
                     }
                 }
             }

@@ -95,7 +95,7 @@
     <string name="zerno_brightness">Brightness</string>
     <string name="zerno_contrast">Contrast</string>
     <string name="zerno_saturation">Saturation</string>
-    <string name="zerno_image_hint">Brightness, contrast and saturation are shown on the preview. Sharpness, grain and the rest are applied as the photo is saved; RAW files are not changed.</string>
+    <string name="zerno_image_hint">Brightness, contrast and saturation are shown on the preview. Sharpness and the rest are applied as the photo is saved; RAW files are not changed.</string>
     <string name="zerno_reset">Reset</string>
     <string name="zerno_shooting">Shooting</string>
     <string name="zerno_qr_setting">Read QR codes</string>
@@ -190,7 +190,5 @@
     <string name="zerno_resolution_item">%1$s MP · %2$d×%3$d</string>
     <string name="zerno_resolution_hint">For the aspect ratio chosen on the camera screen. Changing the aspect ratio picks the largest size again.</string>
     <string name="zerno_ois">Optical stabilisation</string>
-    <string name="zerno_grain">Film grain</string>
-    <string name="zerno_info_grain">Film grain</string>
     <string name="zerno_info_frames">Frames</string>
 </resources>
