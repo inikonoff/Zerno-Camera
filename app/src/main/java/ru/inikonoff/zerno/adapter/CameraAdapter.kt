@@ -483,8 +483,9 @@ class CameraAdapter(private val activity: MainActivity) {
         ZernoHooks.still_iso = if (override) computedIso else 0
         ZernoHooks.still_exposure_time = if (override) computedShutter else 0L
         if (override) timings = timings.copy(shotLabel = timings.shotLabel + ", ${s.pro.exposureMode} -> ISO $computedIso, ${Scales.formatShutter(computedShutter)}")
-        ZernoHooks.exif_description = exifDescription(s)
-        ZernoHooks.exif_software = "Zerno ${BuildConfig.VERSION_NAME}"
+        // copies the processing settings (colour noise, sharpness, brightness...) for this photo, so that
+        // later changes, while it waits to be saved, don't affect it or what its EXIF says
+        ZernoHooks.beginShot(exifDescription(s))
         activity.takePicture(false)
         poll()
     }

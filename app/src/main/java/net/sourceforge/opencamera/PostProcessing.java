@@ -561,7 +561,7 @@ public class PostProcessing {
                 throw new IOException();
             }
         }
-        bitmap = ZernoHooks.adjustImage(data, bitmap); // Zerno: brightness/contrast/saturation
+        bitmap = ZernoHooks.adjustImage(request.zerno_shot, data, bitmap); // Zerno: colour noise, sharpness, brightness/contrast/saturation
         bitmap = stampImage(request, data, bitmap);
         if( MyDebug.LOG ) {
             Log.d(TAG, "Save single image performance: time after photostamp: " + (System.currentTimeMillis() - time_s));

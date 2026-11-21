@@ -579,8 +579,8 @@ public class ExifHandler extends Thread {
 
     /** Whether custom exif tags need to be applied to the image file.
      */
-    private static boolean hasCustomExif(String custom_tag_artist, String custom_tag_copyright) {
-        if( ZernoHooks.hasCustomExif() )
+    private static boolean hasCustomExif(ZernoHooks.Shot zerno_shot, String custom_tag_artist, String custom_tag_copyright) {
+        if( ZernoHooks.hasCustomExif(zerno_shot) )
             return true; // Zerno: the shooting settings are recorded in every photo
         if( custom_tag_artist != null && !custom_tag_artist.isEmpty() )
             return true;
@@ -606,7 +606,6 @@ public class ExifHandler extends Thread {
             // fine to ignore request.remove_device_exif, as this is a separate user option
             exif.setAttribute(ExifInterface.TAG_COPYRIGHT, custom_tag_copyright);
         }
-        ZernoHooks.customExif(exif); // Zerno
     }
 
     /** Adds exif tags for datetime from the supplied date, if not present. Needed for camera vendor
@@ -830,7 +829,7 @@ public class ExifHandler extends Thread {
     static void updateExif(Context context, ImageSaver.Request request, File picFile, Uri saveUri) throws IOException {
         if( MyDebug.LOG )
             Log.d(TAG, "updateExif: " + picFile);
-        if( request.store_geo_direction || request.store_ypr || hasCustomExif(request.custom_tag_artist, request.custom_tag_copyright) ||
+        if( request.store_geo_direction || request.store_ypr || hasCustomExif(request.zerno_shot, request.custom_tag_artist, request.custom_tag_copyright) ||
                 request.using_camera_extensions || // when using camera extensions, we need to call modifyExif() to fix up various missing tags
                 needGPSExifFix(request.type == ImageSaver.Request.Type.JPEG, request.using_camera2, request.store_location) ) {
             long time_s = System.currentTimeMillis();
@@ -844,6 +843,7 @@ public class ExifHandler extends Thread {
                     ExifInterface exif = exif_holder.getExif();
                     if( exif != null ) {
                         modifyExif(exif, request.remove_device_exif, request.type == ImageSaver.Request.Type.JPEG, request.using_camera2, request.using_camera_extensions, request.current_date, request.store_location, request.location, request.store_geo_direction, request.geo_direction, request.custom_tag_artist, request.custom_tag_copyright, request.level_angle, request.pitch_angle, request.store_ypr);
+                        ZernoHooks.customExif(exif, request.zerno_shot); // Zerno
 
                         if( MyDebug.LOG )
                             Log.d(TAG, "*** time after modifyExif: " + (System.currentTimeMillis() - time_s));
@@ -895,6 +895,7 @@ public class ExifHandler extends Thread {
         }
 
         modifyExif(exif_new, request.remove_device_exif, request.type == ImageSaver.Request.Type.JPEG, request.using_camera2, request.using_camera_extensions, request.current_date, request.store_location, request.location, request.store_geo_direction, request.geo_direction, request.custom_tag_artist, request.custom_tag_copyright, request.level_angle, request.pitch_angle, request.store_ypr);
+        ZernoHooks.customExif(exif_new, request.zerno_shot); // Zerno
 
         removeExifTags(exif_new, request); // must be last, before saving attributes
         exif_new.saveAttributes();

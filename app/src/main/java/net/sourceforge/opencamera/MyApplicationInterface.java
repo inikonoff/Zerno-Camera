@@ -2860,6 +2860,7 @@ public class MyApplicationInterface extends BasicApplicationInterface {
     @Override
     public void onCaptureStarted() {
         ZernoHooks.mark(ZernoHooks.MARK_CAPTURE_STARTED); // Zerno
+        ZernoHooks.captureStarted(); // Zerno: the settings that this photo will be processed with
         if( MyDebug.LOG )
             Log.d(TAG, "onCaptureStarted");
         n_capture_images = 0;

@@ -175,6 +175,8 @@ public class ImageSaver extends Thread {
         final String custom_tag_artist;
         final String custom_tag_copyright;
         final int sample_factor; // sampling factor for thumbnail, higher means lower quality
+        /** Zerno: the Zerno settings in force when this photo was captured. */
+        ZernoHooks.Shot zerno_shot = ZernoHooks.currentShot();
 
         Request(Type type,
                 ProcessType process_type,
@@ -258,7 +260,7 @@ public class ImageSaver extends Thread {
          *  data will not be copied.
          */
         Request copy() {
-            return new Request(this.type,
+            Request copy = new Request(this.type,
                     this.process_type,
                     this.force_suffix,
                     this.suffix_offset,
@@ -286,6 +288,8 @@ public class ImageSaver extends Thread {
                     this.custom_tag_artist,
                     this.custom_tag_copyright,
                     this.sample_factor);
+            copy.zerno_shot = this.zerno_shot; // Zerno: the same settings, not the ones in force now
+            return copy;
         }
     }
 
@@ -2110,6 +2114,8 @@ public class ImageSaver extends Thread {
                         }
                     }
                 }
+
+                ZernoHooks.verifySaved(main_activity, picFile, saveUri, request.image_format == Request.ImageFormat.STD); // Zerno: record whether the written file is complete
 
                 if( update_thumbnail ) {
                     // clear just in case we're unable to update this - don't want an out of date cached uri

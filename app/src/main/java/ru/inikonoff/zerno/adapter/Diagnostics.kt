@@ -60,6 +60,7 @@ object Diagnostics {
                 line("shutter pressed -> saved", press, saved)
                 appendLine("requested: ${net.sourceforge.opencamera.ZernoHooks.last_still_request}")
                 appendLine("camera reported: ${net.sourceforge.opencamera.ZernoHooks.last_still_result}")
+                appendLine("saved file: ${net.sourceforge.opencamera.ZernoHooks.last_save_check} (failed checks since start: ${net.sourceforge.opencamera.ZernoHooks.save_check_failures})")
             }
         }
         appendLine()

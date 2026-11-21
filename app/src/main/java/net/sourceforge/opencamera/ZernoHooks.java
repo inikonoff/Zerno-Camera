@@ -185,7 +185,7 @@ public final class ZernoHooks {
 
     /** A 4x5 colour matrix (as used by android.graphics.ColorMatrix) applied to every saved
      *  photo, or null for no adjustment. Set by the adapter from the brightness / contrast /
-     *  saturation settings.
+     *  saturation settings. This is the current setting; each photo gets its own copy (see Shot).
      */
     public static volatile float [] color_matrix;
 
@@ -200,11 +200,13 @@ public final class ZernoHooks {
     /** Applies the colour noise removal and color_matrix to the photo. If there is nothing to
      *  do, returns the supplied bitmap (which may be null, meaning that the JPEG data is saved
      *  untouched). Works in place, in bands, so that no second full-size bitmap is needed.
+     *  The settings come from the Shot taken when the photo was captured, not from the current
+     *  settings, which may have been changed while the photo waited in the save queue.
      */
-    static Bitmap adjustImage(byte [] data, Bitmap bitmap) {
-        final float [] matrix = color_matrix;
-        final int chroma_level = chroma_denoise;
-        final int sharp_level = sharpness;
+    static Bitmap adjustImage(Shot shot, byte [] data, Bitmap bitmap) {
+        final float [] matrix = shot.color_matrix;
+        final int chroma_level = shot.chroma_denoise;
+        final int sharp_level = shot.sharpness;
         if( !ZERNO_UI || ( matrix == null && chroma_level <= 0 && sharp_level == 0 ) )
             return bitmap;
         try {
@@ -390,26 +392,163 @@ public final class ZernoHooks {
 
     // ---- exif ----
 
-    /** A one-line description of Zerno's settings for the photo being taken (plain ASCII), set
-     *  by the adapter when the shutter is pressed; written to the photo's ImageDescription tag.
+    /** The settings that are applied when a photo is saved (which can be some time after it was
+     *  taken - several photos can be waiting in the save queue). They are copied when the photo is
+     *  captured, so that changing a setting afterwards doesn't alter photos already taken, and so
+     *  that what is written to the photo's EXIF is what was really applied.
+     *  Immutable (the matrix array is never modified after it is copied).
      */
-    public static volatile String exif_description;
-    /** Written to the photo's Software tag. */
-    public static volatile String exif_software;
+    static final class Shot {
+        final float [] color_matrix;
+        final int chroma_denoise;
+        final int sharpness;
+        /** One line describing Zerno's settings (plain ASCII), for the ImageDescription tag; null if unknown. */
+        final String exif_description;
+        final String exif_software;
+        final long time;
 
-    static boolean hasCustomExif() {
-        return ZERNO_UI && exif_description != null;
+        Shot(float [] color_matrix, int chroma_denoise, int sharpness, String exif_description, String exif_software, long time) {
+            this.color_matrix = color_matrix;
+            this.chroma_denoise = chroma_denoise;
+            this.sharpness = sharpness;
+            this.exif_description = exif_description;
+            this.exif_software = exif_software;
+            this.time = time;
+        }
     }
 
-    static void customExif(androidx.exifinterface.media.ExifInterface exif) {
+    /** How long a Shot prepared at a shutter press stays valid, if the capture never starts. */
+    private static final long PENDING_SHOT_MS = 30000;
+    private static volatile Shot pending_shot; // prepared by the UI at the shutter press
+    private static volatile Shot current_shot; // the photo that is being taken
+
+    private static Shot snapshot(String exif_description) {
+        final float [] matrix = color_matrix;
+        return new Shot(matrix != null ? matrix.clone() : null, chroma_denoise, sharpness, exif_description,
+                "Zerno " + BuildConfig.VERSION_NAME, android.os.SystemClock.uptimeMillis());
+    }
+
+    /** Called by the adapter when the shutter is pressed: copies the current settings, together
+     *  with the description of them to write to the photo's EXIF (plain ASCII).
+     */
+    public static void beginShot(String exif_description) {
+        pending_shot = snapshot(exif_description);
+    }
+
+    /** Called when the camera starts the exposure: the prepared Shot (or, if the photo was not
+     *  started from the Zerno UI - e.g. with a volume key - a fresh copy of the current
+     *  settings, without an EXIF description) becomes the Shot of the photo being taken.
+     */
+    static void captureStarted() {
+        final Shot pending = pending_shot;
+        pending_shot = null;
+        if( pending != null && android.os.SystemClock.uptimeMillis() - pending.time <= PENDING_SHOT_MS )
+            current_shot = pending;
+        else
+            current_shot = snapshot(null);
+    }
+
+    /** The Shot to attach to a new save request. */
+    static Shot currentShot() {
+        final Shot shot = current_shot;
+        return shot != null ? shot : snapshot(null);
+    }
+
+    static boolean hasCustomExif(Shot shot) {
+        return ZERNO_UI && shot != null && shot.exif_description != null;
+    }
+
+    static void customExif(androidx.exifinterface.media.ExifInterface exif, Shot shot) {
+        if( !ZERNO_UI || shot == null )
+            return;
+        if( shot.exif_description != null )
+            exif.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_IMAGE_DESCRIPTION, shot.exif_description);
+        if( shot.exif_software != null )
+            exif.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_SOFTWARE, shot.exif_software);
+    }
+
+    // ---- check of the saved file (diagnostics) ----
+
+    /** What the check of the last saved photo found (for the diagnostics report). */
+    public static volatile String last_save_check = "-";
+    /** How many saved photos have failed the check since the app started. */
+    public static volatile int save_check_failures;
+
+    /** Checks the photo that has just been written (and its EXIF updated): that the file is not
+     *  empty, that its header can be decoded to a size and - for a JPEG - that it ends with the
+     *  end-of-image marker, i.e. was not cut short. Only records the result (see
+     *  last_save_check); the save is not affected, whatever the outcome. Never throws.
+     */
+    static void verifySaved(android.content.Context context, java.io.File file, android.net.Uri uri, boolean jpeg) {
         if( !ZERNO_UI )
             return;
-        final String description = exif_description;
-        if( description != null )
-            exif.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_IMAGE_DESCRIPTION, description);
-        final String software = exif_software;
-        if( software != null )
-            exif.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_SOFTWARE, software);
+        String result;
+        boolean failed = false;
+        android.os.ParcelFileDescriptor pfd = null;
+        try {
+            if( file != null )
+                pfd = android.os.ParcelFileDescriptor.open(file, android.os.ParcelFileDescriptor.MODE_READ_ONLY);
+            else if( uri != null )
+                pfd = context.getContentResolver().openFileDescriptor(uri, "r");
+            if( pfd == null ) {
+                result = "not checked: file could not be opened";
+            }
+            else {
+                final java.io.FileInputStream stream = new java.io.FileInputStream(pfd.getFileDescriptor());
+                final java.nio.channels.FileChannel channel = stream.getChannel();
+                final long size = channel.size();
+                android.graphics.BitmapFactory.Options options = new android.graphics.BitmapFactory.Options();
+                options.inJustDecodeBounds = true;
+                android.graphics.BitmapFactory.decodeFileDescriptor(pfd.getFileDescriptor(), null, options);
+                if( size <= 0 ) {
+                    result = "FAILED: empty file";
+                    failed = true;
+                }
+                else if( options.outWidth <= 0 || options.outHeight <= 0 ) {
+                    result = "FAILED: header not readable, " + size + " bytes";
+                    failed = true;
+                }
+                else {
+                    boolean complete = true;
+                    if( jpeg && size >= 2 ) {
+                        java.nio.ByteBuffer tail = java.nio.ByteBuffer.allocate(2);
+                        int n = 0;
+                        while( n < 2 ) {
+                            int read = channel.read(tail, size - 2 + n);
+                            if( read < 0 )
+                                break;
+                            n += read;
+                        }
+                        complete = n == 2 && ( tail.get(0) & 0xff ) == 0xff && ( tail.get(1) & 0xff ) == 0xd9;
+                    }
+                    if( complete ) {
+                        result = "ok, " + options.outWidth + "x" + options.outHeight + ", " + size + " bytes";
+                    }
+                    else {
+                        result = "FAILED: file cut short (no end marker), " + options.outWidth + "x" + options.outHeight + ", " + size + " bytes";
+                        failed = true;
+                    }
+                }
+            }
+        }
+        catch(Exception e) {
+            result = "not checked: " + e.getClass().getSimpleName();
+        }
+        finally {
+            if( pfd != null ) {
+                try {
+                    pfd.close();
+                }
+                catch(java.io.IOException e) {
+                    // nothing to do
+                }
+            }
+        }
+        if( failed ) {
+            save_check_failures++;
+            MyDebug.logStackTrace("ZernoHooks", "saved photo failed the check: " + result, new RuntimeException(result));
+        }
+        last_save_check = result;
     }
 
     // ---- touch focus (diagnostics) ----
