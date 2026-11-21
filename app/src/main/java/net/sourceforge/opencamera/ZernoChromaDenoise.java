@@ -99,28 +99,40 @@ final class ZernoChromaDenoise {
                 sum_cr[i] = (sum_cr[i] * 16) / count[i];
             }
         }
-        int [] temp = new int[count.length];
+        int [] temp_cb = new int[count.length];
+        int [] temp_cr = new int[count.length];
         for(int pass=0;pass<2;pass++) {
-            boxBlur(sum_cb, temp);
-            boxBlur(sum_cr, temp);
+            smooth(sum_cb, sum_cr, temp_cb, temp_cr);
+            System.arraycopy(temp_cb, 0, sum_cb, 0, temp_cb.length);
+            System.arraycopy(temp_cr, 0, sum_cr, 0, temp_cr.length);
         }
     }
 
-    /** 3x3 box blur of a small_w x small_h plane, in place. */
-    private void boxBlur(int [] plane, int [] temp) {
-        // horizontal
+    /** 3x3 average of the small colour planes (scaled by 16), into out_cb / out_cr. A neighbouring
+     *  block is only included if its colour is within t_high of the block's own: otherwise the
+     *  smoothing would mix the colours on the two sides of a real colour edge, and wash out the
+     *  colour next to it.
+     */
+    private void smooth(int [] cb_plane, int [] cr_plane, int [] out_cb, int [] out_cr) {
+        final int limit = t_high * 16;
         for(int y=0;y<small_h;y++) {
-            int o = y*small_w;
             for(int x=0;x<small_w;x++) {
-                int left = plane[o + Math.max(x-1, 0)], right = plane[o + Math.min(x+1, small_w-1)];
-                temp[o + x] = (left + plane[o + x] + right) / 3;
-            }
-        }
-        // vertical
-        for(int y=0;y<small_h;y++) {
-            int o = y*small_w, up = Math.max(y-1, 0)*small_w, down = Math.min(y+1, small_h-1)*small_w;
-            for(int x=0;x<small_w;x++) {
-                plane[o + x] = (temp[up + x] + temp[o + x] + temp[down + x]) / 3;
+                final int i = y*small_w + x;
+                final int c_cb = cb_plane[i], c_cr = cr_plane[i];
+                int sum_b = 0, sum_r = 0, n = 0;
+                for(int yy=Math.max(y-1, 0);yy<=Math.min(y+1, small_h-1);yy++) {
+                    for(int xx=Math.max(x-1, 0);xx<=Math.min(x+1, small_w-1);xx++) {
+                        final int j = yy*small_w + xx;
+                        if( Math.max(Math.abs(cb_plane[j] - c_cb), Math.abs(cr_plane[j] - c_cr)) < limit ) {
+                            sum_b += cb_plane[j];
+                            sum_r += cr_plane[j];
+                            n++;
+                        }
+                    }
+                }
+                // n >= 1: the block itself is always within the limit of itself
+                out_cb[i] = sum_b / n;
+                out_cr[i] = sum_r / n;
             }
         }
     }
@@ -146,13 +158,26 @@ final class ZernoChromaDenoise {
                 int c = pixels[offset + x];
                 int r = (c >> 16) & 0xff, g = (c >> 8) & 0xff, b = c & 0xff;
                 int x0 = x_index[x], x1 = Math.min(x0 + 1, small_w - 1), wx = x_weight[x];
-                // bilinear sample of the smoothed colour (scaled by 16)
-                int top = sum_cb[row0 + x0] * (256 - wx) + sum_cb[row0 + x1] * wx;
-                int bottom = sum_cb[row1 + x0] * (256 - wx) + sum_cb[row1 + x1] * wx;
-                int smooth_cb = ((top >> 8) * (256 - y_weight) + (bottom >> 8) * y_weight) >> 12;
-                top = sum_cr[row0 + x0] * (256 - wx) + sum_cr[row0 + x1] * wx;
-                bottom = sum_cr[row1 + x0] * (256 - wx) + sum_cr[row1 + x1] * wx;
-                int smooth_cr = ((top >> 8) * (256 - y_weight) + (bottom >> 8) * y_weight) >> 12;
+                // bilinear sample of the smoothed colour (scaled by 16) - but only from those of the
+                // four surrounding blocks whose colour is close to the pixel's own: at a real colour
+                // edge, the blocks on the other side must not pull the colour towards them
+                final int own_cb = cb(r, g, b) * 16, own_cr = cr(r, g, b) * 16;
+                final int limit = t_high * 16;
+                int total_weight = 0, acc_cb = 0, acc_cr = 0;
+                for(int k=0;k<4;k++) {
+                    final int j = ( (k & 2) != 0 ? row1 : row0 ) + ( (k & 1) != 0 ? x1 : x0 );
+                    final int weight = ( (k & 1) != 0 ? wx : 256 - wx ) * ( (k & 2) != 0 ? y_weight : 256 - y_weight );
+                    if( weight == 0 || Math.max(Math.abs(sum_cb[j] - own_cb), Math.abs(sum_cr[j] - own_cr)) >= limit )
+                        continue;
+                    total_weight += weight;
+                    // the four weights add up to 65536 and the colours are within +-2048, so this fits in an int
+                    acc_cb += weight * sum_cb[j];
+                    acc_cr += weight * sum_cr[j];
+                }
+                if( total_weight == 0 )
+                    continue; // no nearby block has a similar colour: a real colour edge, keep the pixel
+                int smooth_cb = (acc_cb / total_weight) >> 4;
+                int smooth_cr = (acc_cr / total_weight) >> 4;
 
                 // how far the pixel's colour should move towards the smoothed colour
                 int d_cb = smooth_cb - cb(r, g, b);

@@ -125,6 +125,30 @@ public class ZernoImageProcessingTest {
     }
 
     @Test
+    public void chromaDenoise_keepsRealColourEdges() {
+        // red | blue: a complete change of colour. Next to the edge, each side must keep (almost)
+        // all of its colour, at every level - the smoothing must not reach across the edge.
+        final int width = 480, height = 240;
+        int [] image = new int[width*height];
+        for(int y=0;y<height;y++)
+            for(int x=0;x<width;x++)
+                image[y*width + x] = x < width/2 ? rgb(200, 40, 40) : rgb(40, 40, 200);
+        final int original = red(rgb(200, 40, 40)) - blue(rgb(200, 40, 40)); // 160
+        for(int level=1;level<=ZernoChromaDenoise.MAX_LEVEL;level++) {
+            int [] result = denoise(image, width, height, level, false);
+            final int row = (height/2)*width;
+            for(int distance=1;distance<=40;distance++) {
+                int red_side = result[row + width/2 - distance];
+                int blue_side = result[row + width/2 + distance - 1];
+                assertTrue("level " + level + ", " + distance + " px from the edge, red side: R-B = " + (red(red_side) - blue(red_side)),
+                        red(red_side) - blue(red_side) >= original * 0.9);
+                assertTrue("level " + level + ", " + distance + " px from the edge, blue side: B-R = " + (blue(blue_side) - red(blue_side)),
+                        blue(blue_side) - red(blue_side) >= original * 0.9);
+            }
+        }
+    }
+
+    @Test
     public void chromaDenoise_doesNotDependOnTheOrderOfBands() {
         // taller than one band, so that there are several
         final int width = 130, height = 700;
