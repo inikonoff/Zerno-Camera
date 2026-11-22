@@ -486,6 +486,8 @@ public final class ZernoHooks {
 
     /** What the check of the last saved photo found (for the diagnostics report). */
     public static volatile String last_save_check = "-";
+    private static Shot save_times_shot;
+    private static final StringBuilder save_times = new StringBuilder();
     /** How many saved photos have failed the check since the app started. */
     public static volatile int save_check_failures;
 
@@ -564,8 +566,21 @@ public final class ZernoHooks {
             MyDebug.logStackTrace("ZernoHooks", "saved photo failed the check: " + result, new RuntimeException(result));
         }
         // how long after the shutter press the file was done: for a series, the last one shows the whole time
-        if( shot != null )
-            result += ", " + ( android.os.SystemClock.uptimeMillis() - shot.time ) + " ms after the shutter";
+        if( shot != null ) {
+            final long elapsed = android.os.SystemClock.uptimeMillis() - shot.time;
+            result += ", " + elapsed + " ms after the shutter";
+            // the frames of a series: when each was done, to see how long the camera takes for one
+            synchronized( ZernoHooks.class ) {
+                if( shot != save_times_shot ) {
+                    save_times_shot = shot;
+                    save_times.setLength(0);
+                }
+                if( save_times.length() < 400 )
+                    save_times.append(save_times.length() > 0 ? ", " : "").append(elapsed);
+                if( save_times.indexOf(",") >= 0 )
+                    result += "; frames done at (ms): " + save_times;
+            }
+        }
         last_save_check = result;
     }
 

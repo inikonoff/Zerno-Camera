@@ -6531,6 +6531,16 @@ public class CameraController2 extends CameraController {
         }
     }
 
+    private static boolean hasModeValue(int [] modes, int mode) {
+        if( modes != null ) {
+            for(int m : modes) {
+                if( m == mode )
+                    return true;
+            }
+        }
+        return false;
+    }
+
     public static List<Float> setupFocusBracketingDistances(float source, float target, int count) {
         if( ZernoHooks.evenFocusSteps() ) // Zerno: Macro mode spreads the frames evenly
             return ZernoFocusSteps.distances(source, target, count);
@@ -7107,6 +7117,15 @@ public class CameraController2 extends CameraController {
                     stillBuilder.set(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_OFF);
                     stillBuilder.set(CaptureRequest.COLOR_CORRECTION_ABERRATION_MODE, CaptureRequest.COLOR_CORRECTION_ABERRATION_MODE_OFF);
                     stillBuilder.set(CaptureRequest.EDGE_MODE, CaptureRequest.EDGE_MODE_OFF);
+                }
+
+                if( burst_type == BurstType.BURSTTYPE_FOCUS && ZernoHooks.macro_mode ) {
+                    // Zerno Macro: the frames are stacked afterwards, so the camera's own (slow) noise
+                    // reduction and sharpening of every frame are put to the fast kind, where offered.
+                    if( hasModeValue(characteristics.get(CameraCharacteristics.NOISE_REDUCTION_AVAILABLE_NOISE_REDUCTION_MODES), CaptureRequest.NOISE_REDUCTION_MODE_FAST) )
+                        stillBuilder.set(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_FAST);
+                    if( hasModeValue(characteristics.get(CameraCharacteristics.EDGE_AVAILABLE_EDGE_MODES), CaptureRequest.EDGE_MODE_FAST) )
+                        stillBuilder.set(CaptureRequest.EDGE_MODE, CaptureRequest.EDGE_MODE_FAST);
                 }
 
                 if( !continuing_fast_burst ) {
