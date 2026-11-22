@@ -3,6 +3,10 @@
     <string name="zerno_mode_night">НОЧЬ</string>
     <string name="zerno_mode_photo">ФОТО</string>
     <string name="zerno_mode_pro">ПРОФИ</string>
+    <string name="zerno_mode_macro">МАКРО</string>
+    <string name="zerno_macro_near">БЛИЖЕ</string>
+    <string name="zerno_macro_far">ДАЛЬШЕ</string>
+    <string name="zerno_macro_frames">КАДРЫ</string>
 
     <string name="zerno_detail">Детализация</string>
     <string name="zerno_detail_off">Выкл</string>

@@ -2,8 +2,10 @@ package ru.inikonoff.zerno.adapter
 
 import android.graphics.Bitmap
 
-/** The shooting modes offered by the mode carousel, in carousel order. */
-enum class Mode { NIGHT, PHOTO, PRO }
+/** The shooting modes offered by the mode carousel, in carousel order. MACRO takes a series of
+ *  photos with the focus stepped evenly between two ends (for stacking afterwards).
+ */
+enum class Mode { NIGHT, PHOTO, PRO, MACRO }
 
 /** "Detail" switch: how much of the driver's noise reduction and sharpening is applied. */
 enum class Detail { OFF, MINIMAL, FAST, STANDARD }
@@ -128,6 +130,21 @@ data class Capabilities(
  */
 enum class ExposureMode { AUTO, ISO_PRIORITY, SHUTTER_PRIORITY, MANUAL }
 
+/** The Macro series: the two ends of the focus range (in dioptres, 0 = infinity; in the order
+ *  the frames are taken) and the number of frames, spread evenly between them.
+ */
+data class MacroState(
+    val near: Float = 0f,
+    val far: Float = 0f,
+    val frames: Int = DEFAULT_FRAMES,
+) {
+    companion object {
+        const val MIN_FRAMES = 2
+        const val MAX_FRAMES = 40
+        const val DEFAULT_FRAMES = 10
+    }
+}
+
 /** The grey-card white balance measurement, while it is on screen. */
 data class GreyCardState(
     val measuring: Boolean = false,
@@ -177,6 +194,7 @@ data class UiState(
     val zoom: Float = 1f,
     val caps: Capabilities = Capabilities(),
     val pro: ProState = ProState(),
+    val macro: MacroState = MacroState(),
     val takingPhoto: Boolean = false,
     val onTimer: Boolean = false,
     /** Whole seconds left on the self-timer (0 when it isn't running). */

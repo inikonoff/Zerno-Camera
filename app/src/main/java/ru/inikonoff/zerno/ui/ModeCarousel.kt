@@ -81,6 +81,7 @@ fun ModeCarousel(modes: List<Mode>, selected: Mode, onSelect: (Mode) -> Unit, mo
                         Mode.NIGHT -> R.string.zerno_mode_night
                         Mode.PHOTO -> R.string.zerno_mode_photo
                         Mode.PRO -> R.string.zerno_mode_pro
+                        Mode.MACRO -> R.string.zerno_mode_macro
                     }
                 ),
                 modifier = Modifier

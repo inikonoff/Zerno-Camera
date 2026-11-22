@@ -163,10 +163,12 @@ class CameraAdapter(private val activity: MainActivity) {
         ZernoHooks.night_strict = settings.nightStrict
         ZernoHooks.night_natural_tone = settings.nightNaturalTone
         ZernoHooks.ois_disabled = !settings.ois
+        ZernoHooks.macro_mode = mode == Mode.MACRO
 
         _state.update {
             it.copy(
                 settings = settings,
+                macro = storedMacro(),
                 mode = mode, detail = detail, hdr = hdr,
                 grid = prefs.getString(PreferenceKeys.ShowGridPreferenceKey, GRID_NONE) != GRID_NONE,
                 level = prefs.getBoolean(PreferenceKeys.ShowAngleLinePreferenceKey, false),
@@ -200,6 +202,7 @@ class CameraAdapter(private val activity: MainActivity) {
             (controller as? CameraController2)?.zernoReapplyWhiteBalance()
         }
         refreshPro()
+        setFocusPeaking(preview.currentFocusValue == FOCUS_MANUAL) // Macro focuses manually
         applyImageAdjustment(s.settings) // the preview view may be new
         preview.zernoApplyDefaultFocusArea()
         poll()
@@ -238,6 +241,9 @@ class CameraAdapter(private val activity: MainActivity) {
             add(Mode.PHOTO)
             if (preview.supportsISORange() && preview.supportsExposureTime()) add(Mode.PRO)
             else if (preview.supportsFocus() && preview.supportedFocusValues?.contains(FOCUS_MANUAL) == true) add(Mode.PRO)
+            // Macro: a focus bracketing series, which needs manual focus
+            if (activity.supportsFocusBracketing() && preview.supportsFocus() && preview.minimumFocusDistance > 0f &&
+                preview.supportedFocusValues?.contains(FOCUS_MANUAL) == true) add(Mode.MACRO)
         }
         val nrModes = preview.supportedNoiseReductionModes ?: emptyList()
         val details = buildList {
@@ -309,7 +315,7 @@ class CameraAdapter(private val activity: MainActivity) {
         val taking = open && preview.isTakingPhoto
         val onTimer = open && preview.isOnTimer
         val s = _state.value
-        val multiFrame = s.mode == Mode.NIGHT || (s.mode == Mode.PHOTO && s.hdr == Hdr.HDR)
+        val multiFrame = s.mode == Mode.NIGHT || s.mode == Mode.MACRO || (s.mode == Mode.PHOTO && s.hdr == Hdr.HDR)
         var pro = s.pro
         if (open && s.mode == Mode.PRO && controller != null && !taking) {
             val aeIso = if (controller.captureResultHasIso()) controller.captureResultIso() else 0
@@ -322,6 +328,7 @@ class CameraAdapter(private val activity: MainActivity) {
                 else -> pro.copy(liveIso = aeIso, liveShutterNs = Scales.nearestShutter(aeShutter))
             }
         }
+        releaseMacroExposureLock(taking || onTimer)
         pollGreyCard()
         updatePreviewPosition()
         val (top, bottom) = previewExtent()
@@ -486,6 +493,7 @@ class CameraAdapter(private val activity: MainActivity) {
         // copies the processing settings (colour noise, sharpness, brightness...) for this photo, so that
         // later changes, while it waits to be saved, don't affect it or what its EXIF says
         ZernoHooks.beginShot(exifDescription(s))
+        if (s.mode == Mode.MACRO && !s.takingPhoto) lockMacroExposure(preview)
         activity.takePicture(false)
         poll()
     }
@@ -565,6 +573,7 @@ class CameraAdapter(private val activity: MainActivity) {
         if (s.settings.brightness != 0 || s.settings.contrast != 0 || s.settings.saturation != 0) {
             add("adjust=brightness %+d, contrast %+d, saturation %+d".format(s.settings.brightness, s.settings.contrast, s.settings.saturation))
         }
+        if (s.mode == Mode.MACRO) add("macro=${s.macro.frames} frames, focus ${s.macro.near}..${s.macro.far} D")
         if (s.mode == Mode.PRO) add("exposure=${s.pro.exposureMode.name.lowercase().replace('_', '-')}")
         if (s.mode == Mode.PRO && s.pro.customWb) add("wb=grey card")
         add("metering=${s.settings.metering.name.lowercase()}")
@@ -941,6 +950,8 @@ class CameraAdapter(private val activity: MainActivity) {
         writeModePreferences(editor, mode, detail, hdr)
         val before = engineModeSnapshot()
         editor.apply()
+        ZernoHooks.macro_mode = mode == Mode.MACRO
+        if (mode == Mode.MACRO) startMacro()
         _state.update { it.copy(mode = mode, detail = detail, hdr = hdr) }
         if (engineModeSnapshot() == before && !engineUpdatePending) {
             // nothing changes for the engine (e.g. Photo <-> Pro with automatic exposure):
@@ -1002,6 +1013,7 @@ class CameraAdapter(private val activity: MainActivity) {
         val photoMode = when (mode) {
             Mode.NIGHT -> "preference_photo_mode_noise_reduction"
             Mode.PRO -> "preference_photo_mode_std"
+            Mode.MACRO -> "preference_photo_mode_focus_bracketing"
             Mode.PHOTO -> when (hdr) {
                 Hdr.OFF -> "preference_photo_mode_std"
                 Hdr.DRO -> "preference_photo_mode_dro"
@@ -1443,6 +1455,91 @@ class CameraAdapter(private val activity: MainActivity) {
         activity.applicationInterface.drawPreview.updateSettings()
     }
 
+    // ---- Macro: a focus series --------------------------------------------------------------
+
+    /** The ends and the frame count are kept in the engine's own preferences (the source and
+     *  target distances and the number of images of its focus bracketing), which it applies when
+     *  the camera is set up.
+     */
+    private fun storedMacro(): MacroState = MacroState(
+        near = prefs.getFloat(PreferenceKeys.FocusDistancePreferenceKey, 0f),
+        far = prefs.getFloat(PreferenceKeys.FocusBracketingTargetDistancePreferenceKey, 0f),
+        frames = prefs.getString(KEY_MACRO_FRAMES, null)?.toIntOrNull()?.coerceIn(MacroState.MIN_FRAMES, MacroState.MAX_FRAMES)
+            ?: MacroState.DEFAULT_FRAMES,
+    )
+
+    /** Entering Macro: the engine's frame count is the one chosen here, and the first time, the
+     *  two ends are given some values to start from.
+     */
+    private fun startMacro() {
+        var m = storedMacro()
+        val min = _state.value.caps.minFocusDistance
+        if (m.near == m.far && min > 0f) {
+            m = m.copy(near = Scales.focusDistanceAt(40, min), far = Scales.focusDistanceAt(30, min))
+            prefs.edit()
+                .putFloat(PreferenceKeys.FocusDistancePreferenceKey, m.near)
+                .putFloat(PreferenceKeys.FocusBracketingTargetDistancePreferenceKey, m.far)
+                .apply()
+        }
+        prefs.edit().putString(PreferenceKeys.FocusBracketingNImagesPreferenceKey, m.frames.toString()).apply()
+        _state.update { it.copy(macro = m) }
+    }
+
+    fun setMacroNear(distance: Float) = setMacroEnd(near = true, distance)
+
+    fun setMacroFar(distance: Float) = setMacroEnd(near = false, distance)
+
+    /** Sets one end of the series, and focuses the preview there, to see what is sharp. */
+    private fun setMacroEnd(near: Boolean, distance: Float) {
+        val s = _state.value
+        val controller = controller ?: return
+        if (s.mode != Mode.MACRO || s.caps.minFocusDistance <= 0f) return
+        val value = distance.coerceIn(0f, s.caps.minFocusDistance)
+        prefs.edit().putFloat(
+            if (near) PreferenceKeys.FocusDistancePreferenceKey else PreferenceKeys.FocusBracketingTargetDistancePreferenceKey, value
+        ).apply()
+        if (near) controller.setFocusBracketingSourceDistance(value) else controller.setFocusBracketingTargetDistance(value)
+        controller.setFocusDistance(value)
+        _state.update { it.copy(macro = if (near) it.macro.copy(near = value) else it.macro.copy(far = value)) }
+    }
+
+    fun setMacroFrames(frames: Int) {
+        val n = frames.coerceIn(MacroState.MIN_FRAMES, MacroState.MAX_FRAMES)
+        prefs.edit().putString(PreferenceKeys.FocusBracketingNImagesPreferenceKey, n.toString())
+            .putString(KEY_MACRO_FRAMES, n.toString()).apply()
+        controller?.setFocusBracketingNImages(n)
+        _state.update { it.copy(macro = it.macro.copy(frames = n)) }
+    }
+
+    /** Which end of the series the preview is focused on while its ruler is open: the near end
+     *  (also what null means, when no ruler is open: the first frame is taken there).
+     */
+    fun macroPreview(far: Boolean) {
+        val s = _state.value
+        val controller = controller ?: return
+        if (s.mode != Mode.MACRO || s.takingPhoto) return
+        controller.setFocusDistance(if (far) s.macro.far else s.macro.near)
+    }
+
+    private var macroLockedAt = 0L
+
+    /** Locks the exposure for the series, so that all frames get the same one (the automatic
+     *  exposure may otherwise drift from one frame to the next, which shows in the stack).
+     */
+    private fun lockMacroExposure(preview: Preview) {
+        val controller = controller ?: return
+        if (!preview.supportsExposureLock()) return
+        controller.setAutoExposureLock(true)
+        macroLockedAt = SystemClock.uptimeMillis()
+    }
+
+    /** Lets the exposure go again once the series has been taken. */
+    private fun releaseMacroExposureLock(busy: Boolean) {
+        if (macroLockedAt == 0L || busy || SystemClock.uptimeMillis() - macroLockedAt < MACRO_LOCK_MIN_MS) return
+        macroLockedAt = 0L
+        controller?.setAutoExposureLock(false)
+    }
+
     // ---- stored Zerno settings ------------------------------------------------------------
 
     private fun storedMode(): Mode = enumPref(KEY_MODE, Mode.PHOTO).let {
@@ -1477,6 +1574,8 @@ class CameraAdapter(private val activity: MainActivity) {
 
         private const val KEY_DEFAULTS_DONE = "zerno_defaults_done"
         private const val KEY_MODE = "zerno_mode"
+        private const val KEY_MACRO_FRAMES = "zerno_macro_frames"
+        private const val MACRO_LOCK_MIN_MS = 1500L
         private const val KEY_DETAIL = "zerno_detail"
         private const val KEY_HDR = "zerno_hdr"
         private const val KEY_METERING = "zerno_metering"

@@ -29,6 +29,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -70,6 +71,7 @@ fun ZernoScreen(adapter: CameraAdapter) {
     var panel by remember { mutableStateOf<Panel?>(null) }
     var controlsTop by remember { mutableIntStateOf(0) }
     var sheetOpen by remember { mutableStateOf(false) }
+    var macroParam by remember { mutableStateOf<MacroParam?>(null) }
 
     Box(Modifier.fillMaxSize()) {
         // taps and pinches on the preview: handled here rather than left to the camera view
@@ -140,7 +142,13 @@ fun ZernoScreen(adapter: CameraAdapter) {
         }
 
         // bottom controls
-        val effectivePanel = panel.takeIf { it !is Panel.Pro || state.mode == Mode.PRO }
+        val effectivePanel = panel.takeIf {
+            (it !is Panel.Pro || state.mode == Mode.PRO) && (it != Panel.Focus || state.mode != Mode.MACRO)
+        }
+        // in Macro the preview follows the end of the series being set
+        LaunchedEffect(macroParam, state.mode) {
+            if (state.mode == Mode.MACRO) adapter.macroPreview(far = macroParam == MacroParam.FAR)
+        }
         Column(
             Modifier
                 .align(Alignment.BottomCenter)
@@ -158,6 +166,9 @@ fun ZernoScreen(adapter: CameraAdapter) {
                         selected = (effectivePanel as? Panel.Pro)?.param,
                         onSelect = { panel = it?.let(Panel::Pro) },
                     )
+                }
+                if (state.mode == Mode.MACRO) {
+                    MacroPanel(state, adapter, selected = macroParam, onSelect = { macroParam = it })
                 }
                 when (effectivePanel) {
                     Panel.Exposure -> ExposurePanel(state, adapter)

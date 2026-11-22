@@ -392,6 +392,18 @@ public final class ZernoHooks {
 
     // ---- exif ----
 
+    /** Whether the Macro mode (a focus bracketing series, to be stacked afterwards) is selected.
+     *  Set by the adapter. Frames of such a series are saved without Zerno's own colour noise
+     *  removal and sharpening: they are best done on the stacked result (the stack averages the
+     *  noise out itself, and sharpening each frame would put halos into the stack).
+     */
+    public static volatile boolean macro_mode;
+
+    /** Whether focus bracketing should spread its frames evenly (see ZernoFocusSteps). */
+    public static boolean evenFocusSteps() {
+        return ZERNO_UI;
+    }
+
     /** The settings that are applied when a photo is saved (which can be some time after it was
      *  taken - several photos can be waiting in the save queue). They are copied when the photo is
      *  captured, so that changing a setting afterwards doesn't alter photos already taken, and so
@@ -424,7 +436,8 @@ public final class ZernoHooks {
 
     private static Shot snapshot(String exif_description) {
         final float [] matrix = color_matrix;
-        return new Shot(matrix != null ? matrix.clone() : null, chroma_denoise, sharpness, exif_description,
+        final boolean macro = macro_mode;
+        return new Shot(matrix != null ? matrix.clone() : null, macro ? 0 : chroma_denoise, macro ? 0 : sharpness, exif_description,
                 "Zerno " + BuildConfig.VERSION_NAME, android.os.SystemClock.uptimeMillis());
     }
 

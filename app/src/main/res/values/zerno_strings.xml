@@ -4,6 +4,10 @@
     <string name="zerno_mode_night">NIGHT</string>
     <string name="zerno_mode_photo">PHOTO</string>
     <string name="zerno_mode_pro">PRO</string>
+    <string name="zerno_mode_macro">MACRO</string>
+    <string name="zerno_macro_near">NEAR</string>
+    <string name="zerno_macro_far">FAR</string>
+    <string name="zerno_macro_frames">FRAMES</string>
 
     <string name="zerno_detail">Detail</string>
     <string name="zerno_detail_off">Off</string>

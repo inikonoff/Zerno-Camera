@@ -2,6 +2,8 @@ package net.sourceforge.opencamera.cameracontroller;
 
 import net.sourceforge.opencamera.HDRProcessor;
 import net.sourceforge.opencamera.MyDebug;
+import net.sourceforge.opencamera.ZernoFocusSteps;
+import net.sourceforge.opencamera.ZernoHooks;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -6530,6 +6532,8 @@ public class CameraController2 extends CameraController {
     }
 
     public static List<Float> setupFocusBracketingDistances(float source, float target, int count) {
+        if( ZernoHooks.evenFocusSteps() ) // Zerno: Macro mode spreads the frames evenly
+            return ZernoFocusSteps.distances(source, target, count);
         List<Float> focus_distances = new ArrayList<>();
         float focus_distance_s = source;
         float focus_distance_e = target;
