@@ -64,7 +64,7 @@ class ViewerActivity : ComponentActivity() {
 
         setContent {
             ViewerScreen(
-                items = items,
+                allItems = items,
                 loaded = loaded,
                 trashMode = trashMode,
                 hasTrash = repository.hasTrash,

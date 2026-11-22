@@ -135,6 +135,7 @@
     <string name="zerno_viewer_trash_empty">Корзина пуста</string>
     <string name="zerno_viewer_trashed">Перемещено в корзину</string>
     <string name="zerno_viewer_undo">Отменить</string>
+    <string name="zerno_series_show">Серия из %d кадров: показать все</string>
     <string name="zerno_viewer_failed">Не получилось</string>
     <string name="zerno_info_file">Файл</string>
     <string name="zerno_info_date">Снято</string>

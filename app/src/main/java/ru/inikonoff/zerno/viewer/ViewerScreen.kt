@@ -94,7 +94,7 @@ private val Dim = TextStyle(color = Color(0x99FFFFFF), fontSize = 13.sp, lineHei
  */
 @Composable
 fun ViewerScreen(
-    items: List<MediaItem>,
+    allItems: List<MediaItem>,
     loaded: Boolean,
     trashMode: Boolean,
     hasTrash: Boolean,
@@ -114,6 +114,11 @@ fun ViewerScreen(
     var chrome by remember { mutableStateOf(true) }
     var info by remember { mutableStateOf(false) }
     var zoomed by remember { mutableStateOf(false) }
+    /** Series shown frame by frame (by the id of their first frame); the others are one photo. */
+    var expanded by remember { mutableStateOf(emptySet<Long>()) }
+    val items = remember(allItems, expanded) {
+        allItems.flatMap { if (it.series.isNotEmpty() && it.id in expanded) listOf(it.copy(series = emptyList())) + it.series else listOf(it) }
+    }
     /** What a confirmation dialog is asking about, if one is showing. */
     var confirm by remember { mutableStateOf<Confirm?>(null) }
     val pagerState = rememberPagerState(pageCount = { items.size })
@@ -208,6 +213,11 @@ fun ViewerScreen(
             }
             if (info && current != null) {
                 InfoPanel(current, repository)
+            }
+            if (current != null && current.series.isNotEmpty() && chrome) {
+                TextButton(
+                    stringResource(R.string.zerno_series_show, current.series.size + 1), primary = true,
+                ) { expanded = expanded + current.id }
             }
             if (trashMode && current != null && chrome) {
                 // three equal buttons across the width, so that they always fit

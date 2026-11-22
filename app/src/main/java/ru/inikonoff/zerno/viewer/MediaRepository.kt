@@ -30,11 +30,44 @@ data class MediaItem(
     val height: Int,
     /** RAW (DNG) files saved with this photo; they follow it when it is trashed or deleted. */
     val companions: List<MediaItem> = emptyList(),
+    /** The other frames of a series (a burst or a focus series, saved as IMG_..._0, _1, ...) shown
+     *  as one photo: this item is the first frame. They follow it when it is trashed or deleted.
+     */
+    val series: List<MediaItem> = emptyList(),
 ) {
     val isRaw: Boolean get() = name.endsWith(".dng", ignoreCase = true)
 }
 
-private fun List<MediaItem>.withCompanions(): List<MediaItem> = flatMap { listOf(it) + it.companions }
+private fun List<MediaItem>.withCompanions(): List<MediaItem> =
+    flatMap { item -> listOf(item) + item.companions + item.series.flatMap { listOf(it) + it.companions } }
+
+private val SERIES_NAME = Regex("^(.+)_(\\d{1,3})(\\.[^.]+)$")
+
+/** Frames saved by one burst share a name up to a number at the end ("IMG_20260101_120000_0.jpg",
+ *  "..._1.jpg"): they become one item, whose [MediaItem.series] holds the rest. A lone numbered
+ *  file stays as it is. The first frame (lowest number) stands for the series, at the place of
+ *  the series' newest file in the list.
+ */
+internal fun groupSeries(items: List<MediaItem>): List<MediaItem> {
+    fun key(item: MediaItem): String? =
+        SERIES_NAME.matchEntire(item.name)?.let { it.groupValues[1] + it.groupValues[3].lowercase() }
+    fun number(item: MediaItem): Int = SERIES_NAME.matchEntire(item.name)!!.groupValues[2].toInt()
+
+    val byKey = items.mapNotNull { item -> key(item)?.let { it to item } }.groupBy({ it.first }, { it.second })
+    val emitted = HashSet<String>()
+    val result = ArrayList<MediaItem>()
+    for (item in items) {
+        val k = key(item)
+        val group = k?.let { byKey[it] }
+        if (k == null || group == null || group.size < 2) {
+            result.add(item)
+        } else if (emitted.add(k)) {
+            val frames = group.sortedBy { number(it) }
+            result.add(frames.first().copy(series = frames.drop(1)))
+        }
+    }
+    return result
+}
 
 /** The outcome of moving photos to/from the trash or deleting them. */
 sealed interface ChangeResult {
@@ -117,7 +150,7 @@ class MediaRepository(private val context: Context, folderPath: String) {
         } catch (e: RuntimeException) {
             // no access: show nothing
         }
-        return pairWithRaw(items)
+        return groupSeries(pairWithRaw(items))
     }
 
     /** A RAW file saved next to a photo of the same name isn't listed on its own: it belongs to
