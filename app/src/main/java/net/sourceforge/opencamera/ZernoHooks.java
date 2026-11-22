@@ -437,7 +437,9 @@ public final class ZernoHooks {
     private static Shot snapshot(String exif_description) {
         final float [] matrix = color_matrix;
         final boolean macro = macro_mode;
-        return new Shot(matrix != null ? matrix.clone() : null, macro ? 0 : chroma_denoise, macro ? 0 : sharpness, exif_description,
+        // Macro frames are not touched one by one (colour adjustments too are left for after the stack):
+        // that would decode and re-encode every full-size frame of the series
+        return new Shot(matrix != null && !macro ? matrix.clone() : null, macro ? 0 : chroma_denoise, macro ? 0 : sharpness, exif_description,
                 "Zerno " + BuildConfig.VERSION_NAME, android.os.SystemClock.uptimeMillis());
     }
 
@@ -492,7 +494,7 @@ public final class ZernoHooks {
      *  end-of-image marker, i.e. was not cut short. Only records the result (see
      *  last_save_check); the save is not affected, whatever the outcome. Never throws.
      */
-    static void verifySaved(android.content.Context context, java.io.File file, android.net.Uri uri, boolean jpeg) {
+    static void verifySaved(android.content.Context context, java.io.File file, android.net.Uri uri, boolean jpeg, Shot shot) {
         if( !ZERNO_UI )
             return;
         String result;
@@ -561,6 +563,9 @@ public final class ZernoHooks {
             save_check_failures++;
             MyDebug.logStackTrace("ZernoHooks", "saved photo failed the check: " + result, new RuntimeException(result));
         }
+        // how long after the shutter press the file was done: for a series, the last one shows the whole time
+        if( shot != null )
+            result += ", " + ( android.os.SystemClock.uptimeMillis() - shot.time ) + " ms after the shutter";
         last_save_check = result;
     }
 

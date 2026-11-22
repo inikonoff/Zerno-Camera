@@ -2115,7 +2115,7 @@ public class ImageSaver extends Thread {
                     }
                 }
 
-                ZernoHooks.verifySaved(main_activity, picFile, saveUri, request.image_format == Request.ImageFormat.STD); // Zerno: record whether the written file is complete
+                ZernoHooks.verifySaved(main_activity, picFile, saveUri, request.image_format == Request.ImageFormat.STD, request.zerno_shot); // Zerno: record whether the written file is complete
 
                 if( update_thumbnail ) {
                     // clear just in case we're unable to update this - don't want an out of date cached uri
