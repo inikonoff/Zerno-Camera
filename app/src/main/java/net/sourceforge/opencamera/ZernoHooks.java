@@ -418,8 +418,11 @@ public final class ZernoHooks {
         final String exif_description;
         final String exif_software;
         final long time;
+        /** A Macro series: its frames are left as the camera made them (no EXIF rewrite either). */
+        final boolean macro;
 
-        Shot(float [] color_matrix, int chroma_denoise, int sharpness, String exif_description, String exif_software, long time) {
+        Shot(float [] color_matrix, int chroma_denoise, int sharpness, String exif_description, String exif_software, long time, boolean macro) {
+            this.macro = macro;
             this.color_matrix = color_matrix;
             this.chroma_denoise = chroma_denoise;
             this.sharpness = sharpness;
@@ -440,13 +443,17 @@ public final class ZernoHooks {
         // Macro frames are not touched one by one (colour adjustments too are left for after the stack):
         // that would decode and re-encode every full-size frame of the series
         return new Shot(matrix != null && !macro ? matrix.clone() : null, macro ? 0 : chroma_denoise, macro ? 0 : sharpness, exif_description,
-                "Zerno " + BuildConfig.VERSION_NAME, android.os.SystemClock.uptimeMillis());
+                "Zerno " + BuildConfig.VERSION_NAME, android.os.SystemClock.uptimeMillis(), macro);
     }
 
     /** Called by the adapter when the shutter is pressed: copies the current settings, together
      *  with the description of them to write to the photo's EXIF (plain ASCII).
      */
     public static void beginShot(String exif_description) {
+        synchronized( ZernoHooks.class ) {
+            received_base = android.os.SystemClock.uptimeMillis();
+            received.setLength(0);
+        }
         pending_shot = snapshot(exif_description);
     }
 
@@ -470,7 +477,8 @@ public final class ZernoHooks {
     }
 
     static boolean hasCustomExif(Shot shot) {
-        return ZERNO_UI && shot != null && shot.exif_description != null;
+        // Macro: rewriting the file of every frame to add the description costs time on every frame
+        return ZERNO_UI && shot != null && shot.exif_description != null && !shot.macro;
     }
 
     static void customExif(androidx.exifinterface.media.ExifInterface exif, Shot shot) {
@@ -486,6 +494,8 @@ public final class ZernoHooks {
 
     /** What the check of the last saved photo found (for the diagnostics report). */
     public static volatile String last_save_check = "-";
+    private static long received_base;
+    private static final StringBuilder received = new StringBuilder(); // when each image came from the camera
     private static Shot save_times_shot;
     private static final StringBuilder save_times = new StringBuilder();
     /** How many saved photos have failed the check since the app started. */
@@ -578,7 +588,7 @@ public final class ZernoHooks {
                 if( save_times.length() < 400 )
                     save_times.append(save_times.length() > 0 ? ", " : "").append(elapsed);
                 if( save_times.indexOf(",") >= 0 )
-                    result += "; frames done at (ms): " + save_times;
+                    result += "; frames done at (ms): " + save_times + "; images from the camera at (ms): " + received;
             }
         }
         last_save_check = result;
@@ -607,6 +617,12 @@ public final class ZernoHooks {
     public static void mark(int what) {
         final long now = android.os.SystemClock.uptimeMillis();
         marks[what] = now;
+        if( what == MARK_IMAGE_RECEIVED ) {
+            synchronized( ZernoHooks.class ) {
+                if( received.length() < 400 )
+                    received.append(received.length() > 0 ? ", " : "").append(now - received_base);
+            }
+        }
         if( what == MARK_CREATE )
             marks[MARK_FIRST_RESUME] = 0;
         else if( what == MARK_RESUME && marks[MARK_FIRST_RESUME] == 0 )
