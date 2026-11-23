@@ -7126,6 +7126,10 @@ public class CameraController2 extends CameraController {
                         stillBuilder.set(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_FAST);
                     if( hasModeValue(characteristics.get(CameraCharacteristics.EDGE_AVAILABLE_EDGE_MODES), CaptureRequest.EDGE_MODE_FAST) )
                         stillBuilder.set(CaptureRequest.EDGE_MODE, CaptureRequest.EDGE_MODE_FAST);
+                    // An experiment: the frames are asked for as video snapshots, which some devices
+                    // take through a lighter pipeline than a full still capture (about a second each
+                    // on the Honor X6c).
+                    stillBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_VIDEO_SNAPSHOT);
                 }
 
                 if( !continuing_fast_burst ) {

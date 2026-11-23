@@ -66,7 +66,6 @@
                 <action android:name="android.media.action.STILL_IMAGE_CAMERA_SECURE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
         <!-- Zerno: the built-in photo viewer. Not exported and with no intent filters: it can only be opened from the camera. -->
         <activity
@@ -82,30 +81,6 @@
         >
         </activity>
 
-        <!-- should not change the android:name, including moving to a subpackage - see http://android-developers.blogspot.co.uk/2011/06/things-that-cannot-change.html -->
-        <activity
-            android:name="TakePhoto"
-            android:label="@string/take_photo"
-            android:icon="@drawable/ic_launcher_take_photo"
-            android:configChanges="orientation|screenSize|keyboardHidden"
-            android:taskAffinity=""
-            android:excludeFromRecents="true"
-            android:exported="false"
-            >
-        </activity>
-        <!-- should not change the android:name, including moving to a subpackage - see http://android-developers.blogspot.co.uk/2011/06/things-that-cannot-change.html -->
-        <receiver
-            android:icon="@drawable/ic_launcher_take_photo"
-            android:label="@string/take_photo"
-            android:name="MyWidgetProviderTakePhoto"
-            android:exported="true">
-            <intent-filter >
-                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-               android:name="android.appwidget.provider"
-               android:resource="@xml/widget_info_take_photo" />
-        </receiver>
         <!-- should not change the android:name, including moving to a subpackage - see http://android-developers.blogspot.co.uk/2011/06/things-that-cannot-change.html -->
         <service
             android:name="net.sourceforge.opencamera.MyTileService"
