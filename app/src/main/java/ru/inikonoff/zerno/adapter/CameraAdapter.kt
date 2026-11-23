@@ -493,7 +493,7 @@ class CameraAdapter(private val activity: MainActivity) {
         // copies the processing settings (colour noise, sharpness, brightness...) for this photo, so that
         // later changes, while it waits to be saved, don't affect it or what its EXIF says
         ZernoHooks.beginShot(exifDescription(s))
-        if (s.mode == Mode.MACRO && !s.takingPhoto) lockMacroExposure(preview)
+        // (no exposure lock for a Macro series: it was found to slow the camera down? - being tested)
         activity.takePicture(false)
         poll()
     }
