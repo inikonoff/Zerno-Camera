@@ -168,7 +168,7 @@ class CameraAdapter(private val activity: MainActivity) {
         _state.update {
             it.copy(
                 settings = settings,
-                macro = storedMacro(),
+                macro = storedMacro().also { ZernoHooks.macro_pause_ms = it.pauseMs },
                 mode = mode, detail = detail, hdr = hdr,
                 grid = prefs.getString(PreferenceKeys.ShowGridPreferenceKey, GRID_NONE) != GRID_NONE,
                 level = prefs.getBoolean(PreferenceKeys.ShowAngleLinePreferenceKey, false),
@@ -493,7 +493,7 @@ class CameraAdapter(private val activity: MainActivity) {
         // copies the processing settings (colour noise, sharpness, brightness...) for this photo, so that
         // later changes, while it waits to be saved, don't affect it or what its EXIF says
         ZernoHooks.beginShot(exifDescription(s))
-        // (no exposure lock for a Macro series: it was found to slow the camera down? - being tested)
+        if (s.mode == Mode.MACRO && !s.takingPhoto) lockMacroExposure(preview)
         activity.takePicture(false)
         poll()
     }
@@ -1466,6 +1466,7 @@ class CameraAdapter(private val activity: MainActivity) {
         far = prefs.getFloat(PreferenceKeys.FocusBracketingTargetDistancePreferenceKey, 0f),
         frames = prefs.getString(KEY_MACRO_FRAMES, null)?.toIntOrNull()?.coerceIn(MacroState.MIN_FRAMES, MacroState.MAX_FRAMES)
             ?: MacroState.DEFAULT_FRAMES,
+        pauseMs = prefs.getString(KEY_MACRO_PAUSE, null)?.toIntOrNull()?.takeIf { it in MacroState.PAUSES_MS } ?: MacroState.DEFAULT_PAUSE_MS,
     )
 
     /** Entering Macro: the engine's frame count is the one chosen here, and the first time, the
@@ -1482,6 +1483,7 @@ class CameraAdapter(private val activity: MainActivity) {
                 .apply()
         }
         prefs.edit().putString(PreferenceKeys.FocusBracketingNImagesPreferenceKey, m.frames.toString()).apply()
+        ZernoHooks.macro_pause_ms = m.pauseMs
         _state.update { it.copy(macro = m) }
     }
 
@@ -1501,6 +1503,13 @@ class CameraAdapter(private val activity: MainActivity) {
         if (near) controller.setFocusBracketingSourceDistance(value) else controller.setFocusBracketingTargetDistance(value)
         controller.setFocusDistance(value)
         _state.update { it.copy(macro = if (near) it.macro.copy(near = value) else it.macro.copy(far = value)) }
+    }
+
+    fun setMacroPause(ms: Int) {
+        val v = ms.takeIf { it in MacroState.PAUSES_MS } ?: return
+        prefs.edit().putString(KEY_MACRO_PAUSE, v.toString()).apply()
+        ZernoHooks.macro_pause_ms = v
+        _state.update { it.copy(macro = it.macro.copy(pauseMs = v)) }
     }
 
     fun setMacroFrames(frames: Int) {
@@ -1575,6 +1584,7 @@ class CameraAdapter(private val activity: MainActivity) {
         private const val KEY_DEFAULTS_DONE = "zerno_defaults_done"
         private const val KEY_MODE = "zerno_mode"
         private const val KEY_MACRO_FRAMES = "zerno_macro_frames"
+        private const val KEY_MACRO_PAUSE = "zerno_macro_pause"
         private const val MACRO_LOCK_MIN_MS = 1500L
         private const val KEY_DETAIL = "zerno_detail"
         private const val KEY_HDR = "zerno_hdr"

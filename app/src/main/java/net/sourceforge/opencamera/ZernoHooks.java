@@ -398,6 +398,15 @@ public final class ZernoHooks {
      *  noise out itself, and sharpening each frame would put halos into the stack).
      */
     public static volatile boolean macro_mode;
+    /** Macro: the pause before each frame of the series after the first, for the lens to settle. The
+     *  engine waits a fixed 500 ms there, which is most of the time a frame takes.
+     */
+    public static volatile int macro_pause_ms = 200;
+
+    /** How long the engine waits before the next frame of a slow burst. */
+    public static int slowBurstDelay(boolean focus_bracketing) {
+        return ZERNO_UI && focus_bracketing && macro_mode ? Math.max(0, macro_pause_ms) : 500;
+    }
 
     /** Whether focus bracketing should spread its frames evenly (see ZernoFocusSteps). */
     public static boolean evenFocusSteps() {

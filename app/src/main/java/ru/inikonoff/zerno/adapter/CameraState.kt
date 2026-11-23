@@ -137,8 +137,12 @@ data class MacroState(
     val near: Float = 0f,
     val far: Float = 0f,
     val frames: Int = DEFAULT_FRAMES,
+    /** The pause before each frame after the first, for the lens to settle (ms). */
+    val pauseMs: Int = DEFAULT_PAUSE_MS,
 ) {
     companion object {
+        const val DEFAULT_PAUSE_MS = 200
+        val PAUSES_MS = listOf(0, 50, 100, 150, 200, 300, 500)
         const val MIN_FRAMES = 2
         const val MAX_FRAMES = 40
         const val DEFAULT_FRAMES = 10

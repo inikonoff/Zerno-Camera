@@ -19,7 +19,7 @@ import ru.inikonoff.zerno.adapter.MacroState
 import ru.inikonoff.zerno.adapter.Scales
 import ru.inikonoff.zerno.adapter.UiState
 
-enum class MacroParam { NEAR, FAR, FRAMES }
+enum class MacroParam { NEAR, FAR, FRAMES, PAUSE }
 
 /** The "Macro" panel: where the series of frames begins and ends, and how many frames; the
  *  frames are spread evenly between the two ends. Tapping one opens a ruler for it; for the
@@ -48,12 +48,14 @@ fun MacroPanel(
                         MacroParam.NEAR -> R.string.zerno_macro_near
                         MacroParam.FAR -> R.string.zerno_macro_far
                         MacroParam.FRAMES -> R.string.zerno_macro_frames
+                        MacroParam.PAUSE -> R.string.zerno_macro_pause
                     }
                 )
                 val value = when (param) {
                     MacroParam.NEAR -> Scales.focusIndexOf(macro.near, min).toString()
                     MacroParam.FAR -> Scales.focusIndexOf(macro.far, min).toString()
                     MacroParam.FRAMES -> macro.frames.toString()
+                    MacroParam.PAUSE -> macro.pauseMs.toString()
                 }
                 Column(
                     Modifier.widthIn(min = 64.dp).tap { onSelect(if (isOpen) null else param) }.padding(vertical = 5.dp),
@@ -81,6 +83,11 @@ fun MacroPanel(
                     endIcon = ZernoIcon.FLOWER, // the closest focus distance
                 )
             }
+            MacroParam.PAUSE -> DrumRuler(
+                labels = MacroState.PAUSES_MS.map { it.toString() },
+                selectedIndex = MacroState.PAUSES_MS.indexOf(macro.pauseMs).coerceAtLeast(0),
+                onSelect = { adapter.setMacroPause(MacroState.PAUSES_MS[it]) },
+            )
             MacroParam.FRAMES -> DrumRuler(
                 labels = (MacroState.MIN_FRAMES..MacroState.MAX_FRAMES).map { it.toString() },
                 selectedIndex = (macro.frames - MacroState.MIN_FRAMES).coerceIn(0, MacroState.MAX_FRAMES - MacroState.MIN_FRAMES),

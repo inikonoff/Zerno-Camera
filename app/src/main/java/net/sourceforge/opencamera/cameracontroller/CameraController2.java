@@ -612,7 +612,7 @@ public class CameraController2 extends CameraController {
                     }
                 }
             }
-        }, 500);
+        }, ZernoHooks.slowBurstDelay(burst_type == BurstType.BURSTTYPE_FOCUS));
     }
 
     private class OnImageAvailableListener implements ImageReader.OnImageAvailableListener {
