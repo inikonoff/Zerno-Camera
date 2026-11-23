@@ -402,6 +402,11 @@ public final class ZernoHooks {
      *  engine waits a fixed 500 ms there, which is most of the time a frame takes.
      */
     public static volatile int macro_pause_ms = 200;
+    /** Macro: which of the changes to the camera's still requests are on (bits): 1 exposure lock,
+     *  2 video snapshot intent, 4 fast noise reduction and edge mode. 0 asks for the frames
+     *  as the engine does by itself. For finding out what slows the frames down.
+     */
+    public static volatile int macro_variant = 0;
 
     /** How long the engine waits before the next frame of a slow burst. */
     public static int slowBurstDelay(boolean focus_bracketing) {

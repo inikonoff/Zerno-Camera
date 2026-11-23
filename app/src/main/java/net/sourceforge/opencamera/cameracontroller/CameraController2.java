@@ -7122,14 +7122,17 @@ public class CameraController2 extends CameraController {
                 if( burst_type == BurstType.BURSTTYPE_FOCUS && ZernoHooks.macro_mode ) {
                     // Zerno Macro: the frames are stacked afterwards, so the camera's own (slow) noise
                     // reduction and sharpening of every frame are put to the fast kind, where offered.
-                    if( hasModeValue(characteristics.get(CameraCharacteristics.NOISE_REDUCTION_AVAILABLE_NOISE_REDUCTION_MODES), CaptureRequest.NOISE_REDUCTION_MODE_FAST) )
-                        stillBuilder.set(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_FAST);
-                    if( hasModeValue(characteristics.get(CameraCharacteristics.EDGE_AVAILABLE_EDGE_MODES), CaptureRequest.EDGE_MODE_FAST) )
-                        stillBuilder.set(CaptureRequest.EDGE_MODE, CaptureRequest.EDGE_MODE_FAST);
+                    if( (ZernoHooks.macro_variant & 4) != 0 ) {
+                        if( hasModeValue(characteristics.get(CameraCharacteristics.NOISE_REDUCTION_AVAILABLE_NOISE_REDUCTION_MODES), CaptureRequest.NOISE_REDUCTION_MODE_FAST) )
+                            stillBuilder.set(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_FAST);
+                        if( hasModeValue(characteristics.get(CameraCharacteristics.EDGE_AVAILABLE_EDGE_MODES), CaptureRequest.EDGE_MODE_FAST) )
+                            stillBuilder.set(CaptureRequest.EDGE_MODE, CaptureRequest.EDGE_MODE_FAST);
+                    }
                     // An experiment: the frames are asked for as video snapshots, which some devices
                     // take through a lighter pipeline than a full still capture (about a second each
                     // on the Honor X6c).
-                    stillBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_VIDEO_SNAPSHOT);
+                    if( (ZernoHooks.macro_variant & 2) != 0 )
+                        stillBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_VIDEO_SNAPSHOT);
                 }
 
                 if( !continuing_fast_burst ) {

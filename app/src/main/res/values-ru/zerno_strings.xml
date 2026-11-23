@@ -8,6 +8,7 @@
     <string name="zerno_macro_far">ДАЛЬШЕ</string>
     <string name="zerno_macro_frames">КАДРЫ</string>
     <string name="zerno_macro_pause">ПАУЗА, мс</string>
+    <string name="zerno_macro_test">ТЕСТ</string>
 
     <string name="zerno_detail">Детализация</string>
     <string name="zerno_detail_off">Выкл</string>

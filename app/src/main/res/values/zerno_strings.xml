@@ -9,6 +9,7 @@
     <string name="zerno_macro_far">FAR</string>
     <string name="zerno_macro_frames">FRAMES</string>
     <string name="zerno_macro_pause">PAUSE, ms</string>
+    <string name="zerno_macro_test">TEST</string>
 
     <string name="zerno_detail">Detail</string>
     <string name="zerno_detail_off">Off</string>

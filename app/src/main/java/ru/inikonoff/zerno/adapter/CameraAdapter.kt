@@ -168,7 +168,7 @@ class CameraAdapter(private val activity: MainActivity) {
         _state.update {
             it.copy(
                 settings = settings,
-                macro = storedMacro().also { ZernoHooks.macro_pause_ms = it.pauseMs },
+                macro = storedMacro().also { ZernoHooks.macro_pause_ms = it.pauseMs; ZernoHooks.macro_variant = it.variant },
                 mode = mode, detail = detail, hdr = hdr,
                 grid = prefs.getString(PreferenceKeys.ShowGridPreferenceKey, GRID_NONE) != GRID_NONE,
                 level = prefs.getBoolean(PreferenceKeys.ShowAngleLinePreferenceKey, false),
@@ -473,7 +473,8 @@ class CameraAdapter(private val activity: MainActivity) {
                 press = SystemClock.uptimeMillis(), ready = 0, saved = 0,
                 shotLabel = "mode ${s.mode}, detail ${s.detail}, hdr ${s.hdr}, focus ${s.focusMode}, flash ${s.flash}, " +
                         "timer ${s.timer.seconds}, chroma ${s.settings.chromaDenoise}, " +
-                        "adjust ${s.settings.brightness}/${s.settings.contrast}/${s.settings.saturation}, size ${preview.currentPictureSize?.let { "${it.width}x${it.height}" }}",
+                        "adjust ${s.settings.brightness}/${s.settings.contrast}/${s.settings.saturation}, size ${preview.currentPictureSize?.let { "${it.width}x${it.height}" }}" +
+                        (if (s.mode == Mode.MACRO) ", macro pause ${s.macro.pauseMs} ms, test ${s.macro.variant}" else ""),
             )
         }
         // ISO / shutter priority: the photo is taken with manual values worked out from what the
@@ -493,7 +494,7 @@ class CameraAdapter(private val activity: MainActivity) {
         // copies the processing settings (colour noise, sharpness, brightness...) for this photo, so that
         // later changes, while it waits to be saved, don't affect it or what its EXIF says
         ZernoHooks.beginShot(exifDescription(s))
-        if (s.mode == Mode.MACRO && !s.takingPhoto) lockMacroExposure(preview)
+        if (s.mode == Mode.MACRO && !s.takingPhoto && (s.macro.variant and 1) != 0) lockMacroExposure(preview)
         activity.takePicture(false)
         poll()
     }
@@ -1467,6 +1468,7 @@ class CameraAdapter(private val activity: MainActivity) {
         frames = prefs.getString(KEY_MACRO_FRAMES, null)?.toIntOrNull()?.coerceIn(MacroState.MIN_FRAMES, MacroState.MAX_FRAMES)
             ?: MacroState.DEFAULT_FRAMES,
         pauseMs = prefs.getString(KEY_MACRO_PAUSE, null)?.toIntOrNull()?.takeIf { it in MacroState.PAUSES_MS } ?: MacroState.DEFAULT_PAUSE_MS,
+        variant = prefs.getString(KEY_MACRO_VARIANT, null)?.toIntOrNull()?.takeIf { it in MacroState.VARIANTS } ?: 0,
     )
 
     /** Entering Macro: the engine's frame count is the one chosen here, and the first time, the
@@ -1484,6 +1486,7 @@ class CameraAdapter(private val activity: MainActivity) {
         }
         prefs.edit().putString(PreferenceKeys.FocusBracketingNImagesPreferenceKey, m.frames.toString()).apply()
         ZernoHooks.macro_pause_ms = m.pauseMs
+        ZernoHooks.macro_variant = m.variant
         _state.update { it.copy(macro = m) }
     }
 
@@ -1503,6 +1506,13 @@ class CameraAdapter(private val activity: MainActivity) {
         if (near) controller.setFocusBracketingSourceDistance(value) else controller.setFocusBracketingTargetDistance(value)
         controller.setFocusDistance(value)
         _state.update { it.copy(macro = if (near) it.macro.copy(near = value) else it.macro.copy(far = value)) }
+    }
+
+    fun setMacroVariant(variant: Int) {
+        val v = variant.takeIf { it in MacroState.VARIANTS } ?: return
+        prefs.edit().putString(KEY_MACRO_VARIANT, v.toString()).apply()
+        ZernoHooks.macro_variant = v
+        _state.update { it.copy(macro = it.macro.copy(variant = v)) }
     }
 
     fun setMacroPause(ms: Int) {
@@ -1585,6 +1595,7 @@ class CameraAdapter(private val activity: MainActivity) {
         private const val KEY_MODE = "zerno_mode"
         private const val KEY_MACRO_FRAMES = "zerno_macro_frames"
         private const val KEY_MACRO_PAUSE = "zerno_macro_pause"
+        private const val KEY_MACRO_VARIANT = "zerno_macro_variant"
         private const val MACRO_LOCK_MIN_MS = 1500L
         private const val KEY_DETAIL = "zerno_detail"
         private const val KEY_HDR = "zerno_hdr"

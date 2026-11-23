@@ -139,8 +139,11 @@ data class MacroState(
     val frames: Int = DEFAULT_FRAMES,
     /** The pause before each frame after the first, for the lens to settle (ms). */
     val pauseMs: Int = DEFAULT_PAUSE_MS,
+    /** For finding what slows the frames down: which changes to the camera's requests are on (see ZernoHooks.macro_variant). */
+    val variant: Int = 0,
 ) {
     companion object {
+        val VARIANTS = listOf(0, 1, 2, 4, 7)
         const val DEFAULT_PAUSE_MS = 200
         val PAUSES_MS = listOf(0, 50, 100, 150, 200, 300, 500)
         const val MIN_FRAMES = 2

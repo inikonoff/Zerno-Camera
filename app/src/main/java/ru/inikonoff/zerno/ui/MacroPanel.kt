@@ -19,7 +19,19 @@ import ru.inikonoff.zerno.adapter.MacroState
 import ru.inikonoff.zerno.adapter.Scales
 import ru.inikonoff.zerno.adapter.UiState
 
-enum class MacroParam { NEAR, FAR, FRAMES, PAUSE }
+/** A test of what slows the frames down: 0 asks the camera for frames the way the engine does,
+ *  the others add one change to the requests (AE: exposure lock, VS: video snapshot, NR: fast
+ *  noise reduction and edge), ALL adds all.
+ */
+private fun variantName(variant: Int) = when (variant) {
+    0 -> "0"
+    1 -> "AE"
+    2 -> "VS"
+    4 -> "NR"
+    else -> "ALL"
+}
+
+enum class MacroParam { NEAR, FAR, FRAMES, PAUSE, TEST }
 
 /** The "Macro" panel: where the series of frames begins and ends, and how many frames; the
  *  frames are spread evenly between the two ends. Tapping one opens a ruler for it; for the
@@ -49,6 +61,7 @@ fun MacroPanel(
                         MacroParam.FAR -> R.string.zerno_macro_far
                         MacroParam.FRAMES -> R.string.zerno_macro_frames
                         MacroParam.PAUSE -> R.string.zerno_macro_pause
+                        MacroParam.TEST -> R.string.zerno_macro_test
                     }
                 )
                 val value = when (param) {
@@ -56,6 +69,7 @@ fun MacroPanel(
                     MacroParam.FAR -> Scales.focusIndexOf(macro.far, min).toString()
                     MacroParam.FRAMES -> macro.frames.toString()
                     MacroParam.PAUSE -> macro.pauseMs.toString()
+                    MacroParam.TEST -> variantName(macro.variant)
                 }
                 Column(
                     Modifier.widthIn(min = 64.dp).tap { onSelect(if (isOpen) null else param) }.padding(vertical = 5.dp),
@@ -83,6 +97,11 @@ fun MacroPanel(
                     endIcon = ZernoIcon.FLOWER, // the closest focus distance
                 )
             }
+            MacroParam.TEST -> DrumRuler(
+                labels = MacroState.VARIANTS.map { variantName(it) },
+                selectedIndex = MacroState.VARIANTS.indexOf(macro.variant).coerceAtLeast(0),
+                onSelect = { adapter.setMacroVariant(MacroState.VARIANTS[it]) },
+            )
             MacroParam.PAUSE -> DrumRuler(
                 labels = MacroState.PAUSES_MS.map { it.toString() },
                 selectedIndex = MacroState.PAUSES_MS.indexOf(macro.pauseMs).coerceAtLeast(0),
